@@ -31,6 +31,7 @@ enum ItemType{
 #[derive(Debug,Clone)]
 enum LibType{
     Name (String),
+    Main (String),
     MT,
 }
 
@@ -52,7 +53,6 @@ impl ItemType {
 					}
 					None => { panic!("impl item error") }
 				};
-//				println!("Found impl {:?}", name);
 				_item_list.push(ItemType::ImplFunc(ItemType::new_vec(&element.child(2).unwrap(), &code), name));
 			}
         }
@@ -63,7 +63,6 @@ impl ItemType {
                 match  node.child_by_field_name("name"){
                         Some(ch) =>{
                                 func_name = code[ch.start_byte()..ch.end_byte()].to_string();
-//								println!("Found {:?}", func_name);
                         },
                         None=>{}
                 }
@@ -108,10 +107,7 @@ impl FileVector {
     pub fn show(&self){
         for element in &self.file_vec {
             print!("{:?}",element.path);
-            match &element.lib_name{
-                LibType::Name(name) =>{println!("{}",name);},
-                _=>{println!("");},
-            }
+            println!("{:?}",element.lib_name);
         }
     }
 
@@ -132,6 +128,10 @@ impl FileVector {
             }
         }
         self.read_toml(toml);
+        self.find_main();
+    }
+    fn find_main(&self){
+        
     }
     fn read_toml(&mut self, toml_dir: String) {
         let toml = read_to_string(&toml_dir).unwrap();
@@ -140,27 +140,41 @@ impl FileVector {
         let mut _name = String::new();
         let mut _path  = String::new();
         for line in toml.lines(){
+            if line.eq("[[bin}}"){
+                name_flag = 3;
+                path_flag = 3;
+            }
             if line.eq("[lib]"){
                 name_flag = 1;
                 path_flag = 1;
             }
-            if name_flag == 1 && line.starts_with("name"){
-                name_flag  = 2;
-                let name_split_vec: Vec<&str> =line.split("\"").collect();
-                _name = name_split_vec[1].to_string();
+            if  line.starts_with("name"){
+                if name_flag ==1 {
+                    name_flag  = 2;
+                }
+                else {
+                    name_flag = 4;
+                }
+                    let name_split_vec: Vec<&str> =line.split("\"").collect();
+                    _name = name_split_vec[1].to_string();
             }
-            else if path_flag ==1 && line.starts_with("path"){
-                path_flag = 2;
-                _path = String::from("");
-                match toml_dir.rsplit_once("Cargo.toml"){
-                    Some((base_dir,_ )) =>{
-                        let end_dir: Vec<&str> =line.split("\"").collect();
-                        base_dir.to_string().push_str(end_dir[1]);
-                        _path.push_str(base_dir);
-                        _path.push_str(end_dir[1]);
-                    },
-                    _=> {},
-                };
+            else if line.starts_with("path"){
+                if path_flag ==1{
+                    path_flag = 2;
+                }
+                else {
+                    path_flag = 4;
+                }
+                    _path = String::from("");
+                    match toml_dir.rsplit_once("Cargo.toml"){
+                        Some((base_dir,_ )) =>{
+                            let end_dir: Vec<&str> =line.split("\"").collect();
+                            base_dir.to_string().push_str(end_dir[1]);
+                            _path.push_str(base_dir);
+                            _path.push_str(end_dir[1]);
+                        },
+                        _=> {},
+                    };
             }
 
             if path_flag==2 && name_flag ==2{
@@ -174,6 +188,19 @@ impl FileVector {
                 path_flag = 0;
                 name_flag = 0;
             }
+            if path_flag==4 && name_flag == 4{
+                for element in &mut *  self.file_vec {
+                    if element.path.eq(&_path){
+                        println!("mainr: {} {}", element.path, _name); 
+                        element.lib_name = LibType::Main(_path);
+                        _path= String::from("");
+                        _name = String::from("");
+                    }
+                }
+                path_flag = 0;
+                name_flag = 0;
+            }
+            
         }
     }
 }
