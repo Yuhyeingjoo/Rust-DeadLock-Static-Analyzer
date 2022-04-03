@@ -130,8 +130,29 @@ impl FileVector {
         self.read_toml(toml);
         self.find_main();
     }
-    fn find_main(&self){
-        
+    fn find_main(&mut self){
+		let mut index: Option<usize> = None;
+		for (i, element) in self.file_vec.iter().enumerate() {
+			match element.lib_name {
+				LibType::Main(_) => {
+					index = Some(i);
+					break;
+				}
+				_ => {}
+			}
+		}
+
+		if let None = index {
+			for (i, element) in self.file_vec.iter().enumerate() {
+				if (element.path.contains("main.rs")) {
+					index = Some(i);
+					break;
+				}
+			}
+		}
+
+		let main = self.file_vec.remove(index.unwrap());
+		self.file_vec.insert(0, main);
     }
     fn read_toml(&mut self, toml_dir: String) {
         let toml = read_to_string(&toml_dir).unwrap();
