@@ -6,9 +6,10 @@ use tree_sitter::Parser;
 use tree_sitter::{Tree,Node};
 use tree_sitter_traversal::{traverse, Order};
 
+
 pub struct FileVector{
     file_vec: Vec<File>,
-	sender: Sender<String>,
+	sender: Sender<(i32, String, String, String)>,
 }
 
 #[derive(Debug)]
@@ -96,7 +97,7 @@ impl File {
     }
 }
 impl FileVector {
-    pub fn new(sender: Sender<String>) ->Self {
+    pub fn new(sender: Sender<(i32, String, String, String)>) ->Self {
         let file_vec : Vec<File> = Vec::new();
 
         Self{

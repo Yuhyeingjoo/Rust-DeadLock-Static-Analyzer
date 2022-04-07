@@ -2,12 +2,9 @@ use std::io;
 use std::sync::mpsc::channel;
 use std::thread;
 
-//extern crate RsFile;
 
 mod rs_file;
 mod dd;
-
-//use rs_file::*;
 
 fn main() {
 	let (sender, receiver) = channel();
