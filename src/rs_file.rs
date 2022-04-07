@@ -1,3 +1,4 @@
+use std::sync::mpsc::{Sender, channel};
 use std::path::Path;
 use std::fs::read_to_string;
 use walkdir::{DirEntry, WalkDir};
@@ -8,6 +9,7 @@ use tree_sitter_traversal::{traverse, Order};
 
 pub struct FileVector{
     file_vec: Vec<File>,
+	sender: Sender<String>,
 }
 
 
@@ -97,11 +99,12 @@ impl File {
     }
 }
 impl FileVector {
-    pub fn new() ->Self {
+    pub fn new(sender: Sender<String>) ->Self {
         let file_vec : Vec<File> = Vec::new();
 
         Self{
             file_vec,
+			sender,
         }
     }
     pub fn show(&self){
