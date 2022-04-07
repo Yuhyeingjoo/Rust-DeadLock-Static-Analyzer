@@ -2,12 +2,17 @@ use std::io;
 use std::sync::mpsc::channel;
 use std::thread;
 
-extern crate RsFile;
+//extern crate RsFile;
+
+mod rs_file;
+mod dd;
+
+//use rs_file::*;
 
 fn main() {
 	let (sender, receiver) = channel();
 
-    let mut file_vec : RsFile::FileVector = RsFile::FileVector::new(sender);
+    let mut file_vec : rs_file::FileVector = rs_file::FileVector::new(sender);
     let mut input_dir = String::new();
     let mut input_toml = String::new();
     io::stdin().read_line(&mut input_dir).expect("Failed to read line");
@@ -17,7 +22,7 @@ fn main() {
 
 	thread::spawn(move || {
 
-	});
+	});	
 
 
     file_vec.traverse_dir(input_dir, input_toml);

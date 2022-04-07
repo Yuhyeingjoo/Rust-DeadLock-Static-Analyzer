@@ -6,13 +6,10 @@ use tree_sitter::Parser;
 use tree_sitter::{Tree,Node};
 use tree_sitter_traversal::{traverse, Order};
 
-
 pub struct FileVector{
     file_vec: Vec<File>,
 	sender: Sender<String>,
 }
-
-
 
 #[derive(Debug)]
 struct File{
