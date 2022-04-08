@@ -6,6 +6,8 @@ use tree_sitter::Parser;
 use tree_sitter::{Tree,Node};
 use tree_sitter_traversal::{traverse, Order};
 
+use std::cell::RefCell;
+use std::rc::Rc;
 
 pub struct FileVector{
     file_vec: Vec<File>,
@@ -35,15 +37,17 @@ enum LibType{
     MT,
 }
 
+static mut block_count: i32 = 0;
+static mut tid_count: i32 = 0;
 
 impl ItemType {
-    fn new_vec(node: &Node<'_>, code: &String) -> Vec<ItemType>{
+    fn new_vec(node: &Node<'_>, code: &String, parent: String) -> Vec<ItemType>{
         
         let mut _item_list :Vec<ItemType> = Vec::new();
 		let preorder: Vec<Node<'_>> = node.children(&mut node.walk()).collect::<Vec<_>>();
         for element in &preorder {
             if element.kind().eq("function_item"){
-                let item_type = ItemType::new(element, code);
+                let item_type = ItemType::new(element, code, parent.clone());
                 _item_list.push(item_type);
             }
 			if element.kind().eq("impl_item") {
@@ -53,12 +57,12 @@ impl ItemType {
 					}
 					None => { panic!("impl item error") }
 				};
-				_item_list.push(ItemType::ImplFunc(ItemType::new_vec(&element.child(2).unwrap(), &code), name));
+				_item_list.push(ItemType::ImplFunc(ItemType::new_vec(&element.child(2).unwrap(), &code, name.clone()), name));
 			}
         }
         _item_list
     }
-    fn new(node : &Node<'_>, code : &String) ->ItemType {
+    fn new(node : &Node<'_>, code : &String, parent: String) ->ItemType {
                 let mut func_name = String::from("");
                 match  node.child_by_field_name("name"){
                         Some(ch) =>{
@@ -66,6 +70,10 @@ impl ItemType {
                         },
                         None=>{}
                 }
+
+		if parent.ne("") {
+			//func_name = format!("{}::{}",parent,func_name);
+		}
         ItemType::
              Func(func_name)
 
@@ -85,7 +93,7 @@ impl File {
 		let mut _item_list;
 		let root_node = ast.root_node();
 		 
-		_item_list  = ItemType::new_vec(&root_node , &code);
+		_item_list  = ItemType::new_vec(&root_node , &code, "".to_string());
         
         Self{
             path : str_path.to_string(),
@@ -96,6 +104,8 @@ impl File {
         }
     }
 }
+
+
 impl FileVector {
     pub fn new(sender: Sender<(i32, String, String, String)>) ->Self {
         let file_vec : Vec<File> = Vec::new();
@@ -106,10 +116,16 @@ impl FileVector {
         }
     }
     pub fn show(&self){
+		
         for element in &self.file_vec {
-            print!("{:?}",element.path);
-            println!("{:?}",element.lib_name);
+            println!("path : {:?}",element.path);
+			println!("libname : {:?}",element.lib_name);
+            println!("item : {:?}",element.item_list);
+
+			
+			
         }
+		
     }
 
     pub fn traverse_dir(&mut self, input_dir : String, toml : String){
@@ -202,9 +218,29 @@ impl FileVector {
             if path_flag==2 && name_flag ==2{
                 for  element in &mut *  self.file_vec {
                     if element.path.eq(&_path){
+						let _lib_name = _name.clone();
+
                         element.lib_name = LibType::Name(_name);
                         _path= String::from("");
                         _name = String::from("");
+						
+						/*
+						match element.item_list.get_mut(0).unwrap() {
+							ItemType::ImplFunc(vec, s) => {
+								for func in &mut * vec {
+									let mut new_name = String::from("");
+									match func {
+										ItemType::Func(name) => {
+											new_name = format!("{}::{}", _lib_name, name);
+										},
+										_ => {},
+									}
+									*func = ItemType::Func(new_name);
+								}								
+							},
+							_ => {},
+						}
+						*/
                     }
                 }
                 path_flag = 0;
@@ -213,7 +249,7 @@ impl FileVector {
             if path_flag==4 && name_flag == 4{
                 for element in &mut *  self.file_vec {
                     if element.path.eq(&_path){
-                        println!("mainr: {} {}", element.path, _name); 
+                        println!("main: {} {}", element.path, _name); 
                         element.lib_name = LibType::Main(_path);
                         _path= String::from("");
                         _name = String::from("");
@@ -225,6 +261,177 @@ impl FileVector {
             
         }
     }
+
+	pub fn start(&self) {
+		
+		let main_tree = &(self.file_vec.get(0).unwrap().ast);
+		let code = &(self.file_vec.get(0).unwrap().code);
+		
+		let root = main_tree.root_node();
+		let preorder: Vec<Node<'_>> = traverse(root.walk(), Order::Pre).collect::<Vec<_>>();
+
+		let mut main_block = main_tree.root_node();
+
+		for x in &preorder {
+			let line = &code[x.start_byte()..x.end_byte()];
+			if line.eq("main") && x.kind().eq("identifier") {
+				main_block = x.next_sibling().unwrap().next_sibling().unwrap();
+			}
+		}
+		
+		self.traverse(&main_tree, String::from("main"), &code, 0, "0".to_string(), String::from(""));
+	}
+
+	fn traverse_block(&self, node: &tree_sitter::Node, code: &str, tid: i32, block: String, upper_idtf: String) {
+		let mut limit = 0;
+		let preorder: Vec<Node<'_>> = traverse(node.walk(), Order::Pre).collect::<Vec<_>>();
+		for x in &preorder {
+			let kind = x.kind();
+			if kind.eq("call_expression") {
+				let call_node = x.child(0).unwrap();
+				let mut key = &code[call_node.start_byte()..call_node.end_byte()];
+				let idtf = key.clone();
+					
+				if key.eq("thread::spawn") {
+					let t_block = x.child(1).unwrap();
+					limit = t_block.end_byte();
+					
+					let mut new_tid = 0;
+					let mut new_bc = 0;
+					unsafe {
+						tid_count = tid_count + 1;
+						new_tid = tid_count;
+					}	
+					unsafe {
+						block_count = block_count + 1;
+						new_bc = block_count;
+					}
+					self.traverse_block(&t_block, &code, new_tid, format!("{}-{}",block.clone(), new_bc), upper_idtf.clone()); 
+				}
+		
+				if call_node.end_byte() < limit {
+					continue;
+				}
+
+				if key.contains(".") {
+					let split: Vec<&str> = key.split(".").collect();
+					key = split.last().unwrap();
+				}
+				let mut idtf = str::replace(idtf, &format!(".{}",key), "");
+
+				if idtf.contains("self") {
+					idtf = idtf.replace("self", &upper_idtf);
+				}
+
+				if key.eq("lock") {
+					/* send lock info
+					println!("  [lock!");
+					println!("  [tid : {:?}", tid);
+					println!("  [block : {:?}", block);
+					println!("  [idtf : {:?}", idtf);
+					*/
+					self.sender.send((tid, idtf.to_string(), block.clone(), key.to_string()));
+				}
+
+				for element in & * self.file_vec {
+					self.search(&element, &element.item_list, key, tid, block.clone(), idtf.clone());
+				}
+			}
+		}
+	}
+
+	fn traverse(&self, tree: &tree_sitter::Tree, target: String, code: &str,  tid: i32, block: String, upper_idtf: String) {
+		let mut target_node = tree.root_node();
+		let root = tree.root_node();
+		let preorder: Vec<Node<'_>> = traverse(root.walk(), Order::Pre).collect::<Vec<_>>();
+		for x in &preorder {
+			let l = &code[x.start_byte()..x.end_byte()];
+
+			if l.eq(&target) && x.kind().eq("identifier") && x.parent().unwrap().kind().eq("function_item"){
+				target_node = x.next_sibling().unwrap().next_sibling().unwrap();
+				break;
+			}
+		}
+
+		let preorder: Vec<Node<'_>> = traverse(target_node.walk(), Order::Pre).collect::<Vec<_>>();	
+
+		let mut limit = 0;
+		for x in &preorder {
+			let kind = x.kind();
+			if kind.eq("call_expression") {
+				let call_node = x.child(0).unwrap();
+				let mut key = &code[call_node.start_byte()..call_node.end_byte()];
+				let idtf = key.clone();
+					
+				if key.eq("thread::spawn") {
+					let t_block = x.child(1).unwrap();
+					limit = t_block.end_byte();
+	
+					let mut new_tid = 0;
+					let mut new_bc = 0;
+					unsafe {
+						tid_count = tid_count + 1;
+						new_tid = tid_count;
+					}	
+					unsafe {
+						block_count = block_count + 1;
+						new_bc = block_count;
+					}
+					self.traverse_block(&t_block, &code, new_tid, format!("{}-{}",block.clone(), new_bc), upper_idtf.clone()); 
+				}
+		
+				if call_node.end_byte() < limit {
+					continue;
+				}
+
+				if key.contains(".") {
+					let split: Vec<&str> = key.split(".").collect();
+					key = split.last().unwrap();
+				}
+				let mut idtf = str::replace(idtf, &format!(".{}",key), "");
+
+				if idtf.contains("self") {
+					idtf = idtf.replace("self", &upper_idtf);
+				}
+
+				if key.eq("lock") {
+					/* send info
+					println!("");
+					println!("  [lock!");
+					println!("  [tid : {:?}", tid);
+					println!("  [block : {:?}", block);
+					println!("  [idtf : {:?}", idtf);
+					*/
+					self.sender.send((tid, idtf.to_string(), block.clone(), key.to_string()));
+				}
+				for element in & * self.file_vec {
+					self.search(&element, &element.item_list, key, tid, block.clone(), idtf.clone());
+				}
+			}
+		}
+	}
+
+	fn search(&self, file: &File, list: &Vec<ItemType>, key: &str, tid: i32, block: String, idtf: String) {
+		for item in list {
+			match item {
+				ItemType::Func(name) => {
+					if key.eq(name) {
+						let mut bc = -1;
+						unsafe {
+							block_count = block_count + 1;
+							bc = block_count;
+						}	
+						self.traverse(&file.ast, key.to_string(), &file.code, tid, format!("{}-{}",block.clone(), bc), idtf.clone());
+					}
+				}
+				ItemType::ImplFunc(new_list, name) => {
+					self.search(&file, &new_list, &key, tid, block.clone(), idtf.clone());	
+				}
+				_ => {}
+			}
+		}
+	}
+
 }
 
 fn is_dir_or_rs(entry: &DirEntry) -> bool {
