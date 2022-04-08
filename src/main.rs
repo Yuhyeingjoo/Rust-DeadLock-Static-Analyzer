@@ -16,13 +16,16 @@ fn main() {
     input_dir = input_dir.trim().to_string();
     io::stdin().read_line(&mut input_toml).expect("Failed to read line");
     input_toml = input_toml.trim().to_string();
-
-	thread::spawn(move || {
-
+	let handle =thread::spawn(move || {
+		let mut graph = dd::GraphMaker::new(receiver);
+		graph.run();
+		
 	});	
 
 
     file_vec.traverse_dir(input_dir, input_toml);
-    file_vec.show()
+	file_vec.start();
+
+	handle.join();
 }
 
