@@ -1,13 +1,10 @@
-use std::sync::mpsc::{Sender, channel};
+use std::sync::mpsc::{Sender};
 use std::path::Path;
 use std::fs::read_to_string;
 use walkdir::{DirEntry, WalkDir};
 use tree_sitter::Parser;
 use tree_sitter::{Tree,Node};
 use tree_sitter_traversal::{traverse, Order};
-
-use std::cell::RefCell;
-use std::rc::Rc;
 
 pub struct FileVector{
     file_vec: Vec<File>,
@@ -120,10 +117,7 @@ impl FileVector {
         for element in &self.file_vec {
             println!("path : {:?}",element.path);
 			println!("libname : {:?}",element.lib_name);
-            println!("item : {:?}",element.item_list);
-
-			
-			
+            println!("item : {:?}",element.item_list);		
         }
 		
     }
@@ -161,7 +155,7 @@ impl FileVector {
 
 		if let None = index {
 			for (i, element) in self.file_vec.iter().enumerate() {
-				if (element.path.contains("main.rs")) {
+				if element.path.contains("main.rs") {
 					index = Some(i);
 					break;
 				}
@@ -262,24 +256,34 @@ impl FileVector {
         }
     }
 
+	pub fn find_block<'a>(&self, tree: &'a tree_sitter::Tree, target: &str, code: &str) -> Option<tree_sitter::Node<'a>> {		
+		let root = tree.root_node();
+		let preorder: Vec<Node<'_>> = traverse(root.walk(), Order::Pre).collect::<Vec<_>>();
+
+		let mut target_block = Option::None;
+
+		for x in &preorder {
+			let line = &code[x.start_byte()..x.end_byte()];
+			if line.eq(target) && x.kind().eq("identifier") {
+				target_block = x.next_sibling().unwrap().next_sibling();
+			}
+		}
+		target_block
+	}
+
 	pub fn start(&self) {
 		
 		let main_tree = &(self.file_vec.get(0).unwrap().ast);
 		let code = &(self.file_vec.get(0).unwrap().code);
-		
-		let root = main_tree.root_node();
-		let preorder: Vec<Node<'_>> = traverse(root.walk(), Order::Pre).collect::<Vec<_>>();
-
-		let mut main_block = main_tree.root_node();
-
-		for x in &preorder {
-			let line = &code[x.start_byte()..x.end_byte()];
-			if line.eq("main") && x.kind().eq("identifier") {
-				main_block = x.next_sibling().unwrap().next_sibling().unwrap();
+	
+		match self.find_block(&main_tree, "main", &code) {
+			Some(block) => {
+				self.traverse_block(&block, &code, 0, "0".to_string(), String::from(""));
+			}
+			_ => {
+				panic!("Couldn't find main block");
 			}
 		}
-		
-		self.traverse(&main_tree, String::from("main"), &code, 0, "0".to_string(), String::from(""));
 	}
 
 	fn traverse_block(&self, node: &tree_sitter::Node, code: &str, tid: i32, block: String, upper_idtf: String) {
@@ -339,99 +343,33 @@ impl FileVector {
 			}
 		}
 	}
-
-	fn traverse(&self, tree: &tree_sitter::Tree, target: String, code: &str,  tid: i32, block: String, upper_idtf: String) {
-		let mut target_node = tree.root_node();
-		let root = tree.root_node();
-		let preorder: Vec<Node<'_>> = traverse(root.walk(), Order::Pre).collect::<Vec<_>>();
-		for x in &preorder {
-			let l = &code[x.start_byte()..x.end_byte()];
-
-			if l.eq(&target) && x.kind().eq("identifier") && x.parent().unwrap().kind().eq("function_item"){
-				target_node = x.next_sibling().unwrap().next_sibling().unwrap();
-				break;
-			}
-		}
-
-		let preorder: Vec<Node<'_>> = traverse(target_node.walk(), Order::Pre).collect::<Vec<_>>();	
-
-		let mut limit = 0;
-		for x in &preorder {
-			let kind = x.kind();
-			if kind.eq("call_expression") {
-				let call_node = x.child(0).unwrap();
-				let mut key = &code[call_node.start_byte()..call_node.end_byte()];
-				let idtf = key.clone();
-					
-				if key.eq("thread::spawn") {
-					let t_block = x.child(1).unwrap();
-					limit = t_block.end_byte();
-	
-					let mut new_tid = 0;
-					let mut new_bc = 0;
-					unsafe {
-						tid_count = tid_count + 1;
-						new_tid = tid_count;
-					}	
-					unsafe {
-						block_count = block_count + 1;
-						new_bc = block_count;
-					}
-					self.traverse_block(&t_block, &code, new_tid, format!("{}-{}",block.clone(), new_bc), upper_idtf.clone()); 
-				}
-		
-				if call_node.end_byte() < limit {
-					continue;
-				}
-
-				if key.contains(".") {
-					let split: Vec<&str> = key.split(".").collect();
-					key = split.last().unwrap();
-				}
-				let mut idtf = str::replace(idtf, &format!(".{}",key), "");
-
-				if idtf.contains("self") {
-					idtf = idtf.replace("self", &upper_idtf);
-				}
-
-				if key.eq("lock") {
-					/* send info
-					println!("");
-					println!("  [lock!");
-					println!("  [tid : {:?}", tid);
-					println!("  [block : {:?}", block);
-					println!("  [idtf : {:?}", idtf);
-					*/
-					self.sender.send((tid, idtf.to_string(), block.clone(), key.to_string()));
-				}
-				for element in & * self.file_vec {
-					self.search(&element, &element.item_list, key, tid, block.clone(), idtf.clone());
-				}
-			}
-		}
-	}
-
-	fn search(&self, file: &File, list: &Vec<ItemType>, key: &str, tid: i32, block: String, idtf: String) {
+	fn search(&self, file: &File, list: &Vec<ItemType>, key: &str, tid: i32, block_id: String, idtf: String) {
 		for item in list {
 			match item {
 				ItemType::Func(name) => {
 					if key.eq(name) {
-						let mut bc = -1;
-						unsafe {
-							block_count = block_count + 1;
-							bc = block_count;
+						match self.find_block(&file.ast, name, &file.code) {
+							Some(block) => {
+								let mut bc = -1;
+								unsafe {
+									block_count = block_count + 1;
+									bc = block_count;
+								}
+								self.traverse_block(&block, &file.code, tid, format!("{}-{}", block_id.clone(), bc), idtf.clone());
+							}
+							_ => {
+								panic!("Couldn't find target block");
+							}
 						}	
-						self.traverse(&file.ast, key.to_string(), &file.code, tid, format!("{}-{}",block.clone(), bc), idtf.clone());
 					}
 				}
 				ItemType::ImplFunc(new_list, name) => {
-					self.search(&file, &new_list, &key, tid, block.clone(), idtf.clone());	
+					self.search(&file, &new_list, &key, tid, block_id.clone(), idtf.clone());	
 				}
 				_ => {}
 			}
 		}
 	}
-
 }
 
 fn is_dir_or_rs(entry: &DirEntry) -> bool {
@@ -448,3 +386,4 @@ fn is_dir_or_rs(entry: &DirEntry) -> bool {
 fn is_rust(entry:&DirEntry) -> bool{
     return entry.file_name().to_str().unwrap().ends_with(".rs")
 }
+
