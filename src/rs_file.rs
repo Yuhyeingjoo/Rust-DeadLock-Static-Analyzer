@@ -265,7 +265,7 @@ impl FileVector {
 
 		for x in &preorder {
 			let line = &code[x.start_byte()..x.end_byte()];
-			if line.eq(target) && x.kind().eq("identifier") {
+			if line.eq(target) && x.kind().eq("identifier") && x.parent().unwrap().kind().eq("function_item"){
 				target_block = x.child_by_field_name("body");
 
 				match target_block {
@@ -306,7 +306,7 @@ impl FileVector {
 				let call_node = x.child(0).unwrap();
 				let mut key = &code[call_node.start_byte()..call_node.end_byte()];
 				let idtf = key.clone();
-					
+
 				if key.eq("thread::spawn") {
 					let t_block = x.child(1).unwrap();
 					limit = t_block.end_byte();
@@ -329,6 +329,7 @@ impl FileVector {
 				}
 
 
+				println!("{}", key);
 				if key.contains(".") {
 					let split: Vec<&str> = key.split(".").collect();
 					key = split.last().unwrap();
@@ -340,6 +341,8 @@ impl FileVector {
 				}
 
 				if key.eq("lock") {
+					println!("lock");
+					println!("tid : {} {}.{} {}",tid, idtf,key, block);
 					self.sender.send((tid, idtf.to_string(), block.clone(), key.to_string()));
 				}
 
@@ -363,12 +366,13 @@ impl FileVector {
 			match item {
 				ItemType::Func(name) => {
 					if key.eq(name) {
-						let mut block_key = "";
+						//println!("matched name : {}", name);
+						let mut block_key = key.clone();
 						if key.contains("::") {
 							let split: Vec<&str> = key.split("::").collect();
 							block_key = split.last().unwrap();
 						}		
-						println!("search -> {} ", block_key);
+						//println!("search -> {} ", block_key);
 						match self.find_block(&file.ast, block_key, &file.code) {
 							Some(block) => {
 								let mut bc = -1;
@@ -379,7 +383,7 @@ impl FileVector {
 								self.traverse_block(&block, &file.code, tid, format!("{}-{}", block_id.clone(), bc), idtf.clone());
 							}
 							_ => {
-								println!("KEY -> {}",block_key);
+								//println!("KEY -> {}",block_key);
 								panic!("Couldn't find target block");
 							}
 						}	
