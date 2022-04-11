@@ -18,8 +18,7 @@ fn main() {
     input_toml = input_toml.trim().to_string();
 	let handle =thread::spawn(move || {
 		let mut graph = dd::GraphMaker::new(receiver);
-		graph.run();
-		
+		graph.run();	
 	});	
 
 
