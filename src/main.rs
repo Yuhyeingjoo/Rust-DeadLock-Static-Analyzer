@@ -23,6 +23,8 @@ fn main() {
 
 
     file_vec.traverse_dir(input_dir, input_toml);
+
+	file_vec.show();
 	file_vec.start();
 
 	handle.join();

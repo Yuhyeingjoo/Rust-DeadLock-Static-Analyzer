@@ -69,7 +69,8 @@ impl ItemType {
                 }
 
 		if parent.ne("") {
-			//func_name = format!("{}::{}",parent,func_name);
+			//
+			func_name = format!("{}::{}",parent,func_name);
 		}
         ItemType::
              Func(func_name)
@@ -218,7 +219,7 @@ impl FileVector {
                         _path= String::from("");
                         _name = String::from("");
 						
-						/*
+						//	
 						match element.item_list.get_mut(0).unwrap() {
 							ItemType::ImplFunc(vec, s) => {
 								for func in &mut * vec {
@@ -234,7 +235,7 @@ impl FileVector {
 							},
 							_ => {},
 						}
-						*/
+						
                     }
                 }
                 path_flag = 0;
@@ -265,7 +266,17 @@ impl FileVector {
 		for x in &preorder {
 			let line = &code[x.start_byte()..x.end_byte()];
 			if line.eq(target) && x.kind().eq("identifier") {
-				target_block = x.next_sibling().unwrap().next_sibling();
+				target_block = x.child_by_field_name("body");
+
+				match target_block {
+					Some(_) => {
+						break;
+					}
+					None => {
+						let parent = x.parent().unwrap();
+						target_block = parent.child_by_field_name("body");
+					}
+				}
 			}
 		}
 		target_block
@@ -288,7 +299,7 @@ impl FileVector {
 
 	fn traverse_block(&self, node: &tree_sitter::Node, code: &str, tid: i32, block: String, upper_idtf: String) {
 		let mut limit = 0;
-		let preorder: Vec<Node<'_>> = traverse(node.walk(), Order::Pre).collect::<Vec<_>>();
+		let mut preorder: Vec<Node<'_>> = traverse(node.walk(), Order::Pre).collect::<Vec<_>>();
 		for x in &preorder {
 			let kind = x.kind();
 			if kind.eq("call_expression") {
@@ -317,6 +328,7 @@ impl FileVector {
 					continue;
 				}
 
+
 				if key.contains(".") {
 					let split: Vec<&str> = key.split(".").collect();
 					key = split.last().unwrap();
@@ -328,12 +340,6 @@ impl FileVector {
 				}
 
 				if key.eq("lock") {
-					/* send lock info
-					println!("  [lock!");
-					println!("  [tid : {:?}", tid);
-					println!("  [block : {:?}", block);
-					println!("  [idtf : {:?}", idtf);
-					*/
 					self.sender.send((tid, idtf.to_string(), block.clone(), key.to_string()));
 				}
 
@@ -341,6 +347,15 @@ impl FileVector {
 					self.search(&element, &element.item_list, key, tid, block.clone(), idtf.clone());
 				}
 			}
+			else if kind.eq("let_declaration") {
+				let mut cursor = x.walk();
+				for child in x.children(&mut cursor) {
+					if child.kind().eq("call_expression") {
+						//println!("child : {:?}", &code[child.start_byte()..child.end_byte()]);
+					}
+				}
+			}
+
 		}
 	}
 	fn search(&self, file: &File, list: &Vec<ItemType>, key: &str, tid: i32, block_id: String, idtf: String) {
@@ -348,7 +363,13 @@ impl FileVector {
 			match item {
 				ItemType::Func(name) => {
 					if key.eq(name) {
-						match self.find_block(&file.ast, name, &file.code) {
+						let mut block_key = "";
+						if key.contains("::") {
+							let split: Vec<&str> = key.split("::").collect();
+							block_key = split.last().unwrap();
+						}		
+						println!("search -> {} ", block_key);
+						match self.find_block(&file.ast, block_key, &file.code) {
 							Some(block) => {
 								let mut bc = -1;
 								unsafe {
@@ -358,6 +379,7 @@ impl FileVector {
 								self.traverse_block(&block, &file.code, tid, format!("{}-{}", block_id.clone(), bc), idtf.clone());
 							}
 							_ => {
+								println!("KEY -> {}",block_key);
 								panic!("Couldn't find target block");
 							}
 						}	

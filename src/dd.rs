@@ -27,7 +27,7 @@ impl GraphMaker {
     pub fn run(&mut self) {
         loop {
             let received : (i32, String, String, String) = self.recv.recv().unwrap();
-            println!("RECEIVED {:?}",received);
+            //println!("RECEIVED {:?}",received);
             let mut tidVec : Vec<(i32,String)>  = Vec::new();
             tidVec.push((received.0, received.2));
             let gnode_bowl = GNode {
@@ -57,25 +57,28 @@ impl GraphMaker {
         match SameNode {
             Some(existing) =>{
                 if GraphMaker::compare_block(&gnode.tidBlock[0], &self.graph.node_weight(existing).unwrap().tidBlock){
-                    println!("self lock {}",&gnode.lockName);
+                    //println!("self lock {}",&gnode.lockName);
                     self.graph.add_edge(existing, existing, Edge{});
 
                 }
                 else if GraphMaker::compare_TID(&gnode.tidBlock[0], &self.graph.node_weight(existing).unwrap().tidBlock){
                     let iterNode = self.graph.node_indices();
                     let gnodeTup = gnode.tidBlock[0].clone();
-                    println!("same lock different block {}", &gnode.lockName);
+                    //println!("same lock different block {}", &gnode.lockName);
                     //println!("Added {:?}", gnode);
                     //let added_node = self.graph.add_node(gnode);
                     for element in iterNode {
                         if GraphMaker::compare_block(&gnodeTup, &self.graph.node_weight(element).unwrap().tidBlock){
+							/*
                             println!("add edge {} to {}",
                                      &self.graph.node_weight(element).unwrap().lockName,
                                      &self.graph.node_weight(existing).unwrap().lockName);
                             println!("add edge {:?} to {:?}",
                                      &self.graph.node_weight(element).unwrap().tidBlock,
                                      &self.graph.node_weight(existing).unwrap().tidBlock);
-                                    self.graph.add_edge(element,existing, Edge{});
+                            */
+							 self.graph.add_edge(element,existing, Edge{});
+							
                         }
 
                     }
@@ -87,33 +90,38 @@ impl GraphMaker {
                     let iterNode = self.graph.node_indices();
                     for element in iterNode {
                         if GraphMaker::compare_block(&gnodeTup, &self.graph.node_weight(element).unwrap().tidBlock){
+							/*
                             println!("add edge {} to {}",
                                      &self.graph.node_weight(element).unwrap().lockName,
                                      &self.graph.node_weight(existing).unwrap().lockName);
                             println!("add edge {:?} to {:?}",
                                      &self.graph.node_weight(element).unwrap().tidBlock,
                                      &self.graph.node_weight(existing).unwrap().tidBlock);
-                                    self.graph.add_edge(element,existing, Edge{});
+							*/
+							self.graph.add_edge(element,existing, Edge{});
+
                         }
                     
                    }
                     self.graph.node_weight_mut(existing).unwrap().tidBlock.push(gnode.tidBlock[0].clone());
-                    println!("pushed {:?}", self.graph.node_weight_mut(existing).unwrap());
+                    //println!("pushed {:?}", self.graph.node_weight_mut(existing).unwrap());
                 }
             },
             None => {
                 let gnodeTup = gnode.tidBlock[0].clone();
                 let iterNode = self.graph.node_indices();
-                println!("Added {:?}", gnode);
+                //println!("Added {:?}", gnode);
                 let added_node = self.graph.add_node(gnode);
                 for element in iterNode {
                     if GraphMaker::compare_block(&gnodeTup, &self.graph.node_weight(element).unwrap().tidBlock){
+							/*
                             println!("add edge {} to {}",
                                      &self.graph.node_weight(element).unwrap().lockName,
                                      &self.graph.node_weight(added_node).unwrap().lockName);
                             println!("add edge {:?} to {:?}",
                                      &self.graph.node_weight(element).unwrap().tidBlock,
                                      &self.graph.node_weight(added_node).unwrap().tidBlock);
+							*/
                         self.graph.add_edge(element,added_node, Edge{});
                     }
                 
