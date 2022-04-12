@@ -24,7 +24,7 @@ struct File{
 enum ItemType{
     ModFunc(Vec<ItemType>, String),
     ImplFunc(Vec<ItemType>, String),
-    Func(String),
+    Func(String, String),
     None,
 }
 #[derive(Debug,Clone)]
@@ -60,6 +60,19 @@ impl ItemType {
         _item_list
     }
     fn new(node : &Node<'_>, code : &String, parent: String) ->ItemType {
+                let ret_node = node.child_by_field_name("return_type");
+                let mut func_return = String::from("");
+                match ret_node {
+                    Some(ch) => {
+                        func_return = code[ch.start_byte()..ch.end_byte()].to_string();
+                    },
+                    None =>{}
+                }    
+                if func_return.eq("Self") {
+                    let impl_node = node.parent().unwrap().parent().unwrap().child(1).unwrap();
+                    func_return =  code[impl_node.start_byte()..impl_node.end_byte()].to_string();
+                }
+                
                 let mut func_name = String::from("");
                 match  node.child_by_field_name("name"){
                         Some(ch) =>{
@@ -73,7 +86,7 @@ impl ItemType {
 			func_name = format!("{}::{}",parent,func_name);
 		}
         ItemType::
-             Func(func_name)
+             Func(func_name,func_return)
 
     }
 }
@@ -224,13 +237,15 @@ impl FileVector {
 							ItemType::ImplFunc(vec, s) => {
 								for func in &mut * vec {
 									let mut new_name = String::from("");
+									let mut new_ret = String::from("");
 									match func {
-										ItemType::Func(name) => {
+										ItemType::Func(name, ret) => {
 											new_name = format!("{}::{}", _lib_name, name);
+											new_ret = ret.to_string();
 										},
 										_ => {},
 									}
-									*func = ItemType::Func(new_name);
+									*func = ItemType::Func(new_name, new_ret);
 								}								
 							},
 							_ => {},
@@ -345,10 +360,19 @@ impl FileVector {
 					println!("tid : {} {}.{} {}",tid, idtf,key, block);
 					self.sender.send((tid, idtf.to_string(), block.clone(), key.to_string()));
 				}
-
-				for element in & * self.file_vec {
-					self.search(&element, &element.item_list, key, tid, block.clone(), idtf.clone());
-				}
+                if  key.contains("::"){
+					let split: Vec<&str> = key.split("::").collect();
+                    let lib_name = split[0];
+                    for element in & * self.file_vec { 
+                        if let LibType::Name(extern_name) = &element.lib_name{
+                            if lib_name.to_string().eq(extern_name.as_str()) {
+                                self.search(&element, &element.item_list, &key[lib_name.len()+2 ..] , tid, block.clone(), idtf.clone());
+                            }
+                            
+                        }
+                    }
+                }
+                
 			}
 			else if kind.eq("let_declaration") {
 				let mut cursor = x.walk();
@@ -357,6 +381,9 @@ impl FileVector {
 						//println!("child : {:?}", &code[child.start_byte()..child.end_byte()]);
 					}
 				}
+
+
+
 			}
 
 		}
@@ -364,7 +391,7 @@ impl FileVector {
 	fn search(&self, file: &File, list: &Vec<ItemType>, key: &str, tid: i32, block_id: String, idtf: String) {
 		for item in list {
 			match item {
-				ItemType::Func(name) => {
+				ItemType::Func(name, ret) => {
 					if key.eq(name) {
 						//println!("matched name : {}", name);
 						let mut block_key = key.clone();
