@@ -6,6 +6,8 @@ use tree_sitter::Parser;
 use tree_sitter::{Tree,Node};
 use tree_sitter_traversal::{traverse, Order};
 
+#[path = "symbol_table.rs"] mod symbol_table;
+
 pub struct FileVector{
     file_vec: Vec<File>,
 	sender: Sender<(i32, String, String, String)>,
@@ -231,26 +233,6 @@ impl FileVector {
                         element.lib_name = LibType::Name(_name);
                         _path= String::from("");
                         _name = String::from("");
-						
-						//	
-						match element.item_list.get_mut(0).unwrap() {
-							ItemType::ImplFunc(vec, s) => {
-								for func in &mut * vec {
-									let mut new_name = String::from("");
-									let mut new_ret = String::from("");
-									match func {
-										ItemType::Func(name, ret) => {
-											new_name = format!("{}::{}", _lib_name, name);
-											new_ret = ret.to_string();
-										},
-										_ => {},
-									}
-									*func = ItemType::Func(new_name, new_ret);
-								}								
-							},
-							_ => {},
-						}
-						
                     }
                 }
                 path_flag = 0;
@@ -313,6 +295,7 @@ impl FileVector {
 	}
 
 	fn traverse_block(&self, node: &tree_sitter::Node, code: &str, tid: i32, block: String, upper_idtf: String) {
+        let st = symbol_table::symbolTable::new();
 		let mut limit = 0;
 		let mut preorder: Vec<Node<'_>> = traverse(node.walk(), Order::Pre).collect::<Vec<_>>();
 		for x in &preorder {
