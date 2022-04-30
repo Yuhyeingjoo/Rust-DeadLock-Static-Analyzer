@@ -1,6 +1,6 @@
 #[derive(Debug)]
 pub struct symbolTable {
-    symbolVec: Vec<(String, i32,String)>,
+    pub symbolVec: Vec<(String, i32,String)>,
 }
 static mut id : i32 = 0;
 impl symbolTable {
@@ -31,10 +31,12 @@ impl symbolTable {
 
         self.symbolVec.push(aVariable);
     }
-    pub fn get<'a>(&'a self, name : &'a str) -> (&'a str,  &'a str) {
+    pub fn get<'a>(&'a self, name : &'a str) -> (&'a str, i32,  &'a str) {
+		//println!("CURRENT STATE OF ST: {:?}", self);
        for element in &self.symbolVec {
            if element.0.eq(name){
-                return (&element.0.as_str(), &element.2.as_str());
+			   println!("COMPARE PARAM : {} and EL : {}", name, element.0);
+                return (&element.0.as_str(), element.1, &element.2.as_str());
                     
            }
        } 
@@ -50,9 +52,10 @@ impl symbolTable {
             }
         }
     }
-
 }
-    
+   
+
+/*
 fn main(){
     let mut ve = symbolTable::new();
     ve.append("t1".to_string(), "Chan".to_string());
@@ -65,3 +68,4 @@ fn main(){
     println!("get {:?}", ve.get(t1));
 
 }
+*/
