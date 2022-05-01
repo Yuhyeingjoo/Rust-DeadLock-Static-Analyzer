@@ -4,6 +4,7 @@ use std::fs::read_to_string;
 use walkdir::{DirEntry, WalkDir};
 use tree_sitter::Parser;
 use tree_sitter::{Tree,Node};
+use regex::Regex;
 use tree_sitter_traversal::{traverse, Order};
 
 #[path = "symbol_table.rs"] mod symbol_table;
@@ -26,7 +27,7 @@ struct File{
 enum ItemType{
     ModFunc(Vec<ItemType>, String),
     ImplFunc(Vec<ItemType>, String),
-    Func(String, String),
+    Func(String, String ,Vec<String> ),
     None,
 }
 #[derive(Debug,Clone)]
@@ -61,6 +62,34 @@ impl ItemType {
         }
         _item_list
     }
+    fn argument_handle(node : &Node<'_>, code : &String)  -> Vec<String> {
+            let argu_node = node.child_by_field_name("parameters");
+            let mut func_argu = String::from("");
+            
+            let mut argu_vec : Vec<String> = Vec::new();
+            match argu_node {
+                Some(ch) => {
+                    let para_name = node.child_by_field_name("parameter");
+                    func_argu = code[ch.start_byte()..ch.end_byte()].to_string();
+                    let argu_split_vec: Vec<&str> =func_argu.split(":").collect();
+
+                    let mut name_len =0;
+                    let mut blank_len =0;
+                    let mat = Regex::new(r"[&|\w]+").unwrap().find(func_argu.as_str());
+                    match mat {
+                        Some (name) => {
+                            //println!("zzzzzzzzzzzzzzzzzzzzzzzzzzzzz{:?}", name.as_str() );
+                            argu_vec.push(name.as_str().to_string());
+                        }
+                        None =>{},
+                    }
+                }
+                None => {
+                   //println!("zzzzzzzzzzzzzzzzzzzzzzzzzzzzzz");
+                }
+            }       
+            return argu_vec;
+    }
     fn new(node : &Node<'_>, code : &String, parent: String) ->ItemType {
                 let ret_node = node.child_by_field_name("return_type");
                 let mut func_return = String::from("");
@@ -74,26 +103,8 @@ impl ItemType {
                     let impl_node = node.parent().unwrap().parent().unwrap().child(1).unwrap();
                     func_return =  code[impl_node.start_byte()..impl_node.end_byte()].to_string();
                 }
-                let argu_node = node.child_by_field_name("parameters");
-                let mut func_argu = String::from("");
-    
-				//argument 처리하는 로직인것같은데 이걸 어디에 저장하는건지??
-				match argu_node {
-                    Some(ch) => {
-                        let para_name = node.child_by_field_name("parameter");
-                        match para_name {
-                            Some(par) =>{
-                                func_argu = code[par.start_byte()..par.end_byte()].to_string();
-                                //println!("zzzzzzzzzzzzz{}", func_argu);
-                            },
-                            None =>{}
-                        }
-                    },
-                    None => {
-                        //println!("zzzzzzzzzzzzzzz");
-                    }
-                }
-                
+
+                let arg_vec = ItemType::argument_handle(node, code); 
                 let mut func_name = String::from("");
                 match  node.child_by_field_name("name"){
                         Some(ch) =>{
@@ -113,7 +124,7 @@ impl ItemType {
 		*/
         
         ItemType::
-             Func(func_name,func_return)
+             Func(func_name,func_return,arg_vec)
 
     }
 }
@@ -267,7 +278,7 @@ impl FileVector {
             if path_flag==4 && name_flag == 4{
                 for element in &mut *  self.file_vec {
                     if element.path.eq(&_path){
-                        println!("main: {} {}", element.path, _name); 
+                        //println!("main: {} {}", element.path, _name); 
                         element.lib_name = LibType::Main(_path);
                         _path= String::from("");
                         _name = String::from("");
@@ -312,7 +323,7 @@ impl FileVector {
 	
 		match self.find_block(&main_tree, "main", &code) {
 			Some(block) => {
-				self.traverse_block(&block, &code, 0, "0".to_string(), String::from(""), Vec::new());
+				self.traverse_block(&block, &code, 0, "0".to_string(),  Vec::new());
 			}
 			_ => {
 				panic!("Couldn't find main block");
@@ -320,7 +331,7 @@ impl FileVector {
 		}
 	}
 
-	fn traverse_block(&self, node: &tree_sitter::Node, code: &str, tid: i32, block: String, upper_idtf: String, arguments :Vec<(String, i32, String)>) {
+	fn traverse_block(&self, node: &tree_sitter::Node, code: &str, tid: i32, block: String, arguments :Vec<(String, i32, String)>) {
         let mut symbol_table = symbol_table::symbolTable::new();
 
 		/*
@@ -330,9 +341,9 @@ impl FileVector {
 			symbol_table.symbolVec.push(arguments[i].clone());
         }
 		*/
-		for arg in arguments {
+		for arg in &arguments {
 			let (name, id, _type) = arg;
-			symbol_table.append(name, _type);
+			symbol_table.append(name.to_string(), _type.to_string());
 		}
 
 		let mut limit = 0;
@@ -361,7 +372,7 @@ impl FileVector {
 						block_count = block_count + 1;
 						new_bc = block_count;
 					}
-					self.traverse_block(&t_block, &code, new_tid, format!("{}-{}",block.clone(), new_bc), upper_idtf.clone(), symbol_table.symbolVec.clone()); 
+					self.traverse_block(&t_block, &code, new_tid, format!("{}-{}",block.clone(), new_bc),  symbol_table.symbolVec.clone()); 
 				}
 		
 				if call_node.end_byte() < limit {
@@ -382,29 +393,19 @@ impl FileVector {
                         }
 					}
 					*/
-					println!("IN ST : {:?}", symbol_table);
-					println!("******get -> {:?}", split[0]);
+					//println!("IN ST : {:?}", symbol_table);
+					//println!("******get -> {:?}", split[0]);
 					let (_, symbol_id, _type) = symbol_table.get(split[0]);
 
-					let type_split: Vec<&str> = _type.split("::").collect();
-                    println!("type split {:?} {:?}", _type, split);
+                    //println!("type split {:?} {:?}", _type, split);
+                    let mut arg = Vec::new();
+                    arg.push(("self".to_string(), symbol_id, _type.to_string()));
                     for element in & * self.file_vec{
-                        if let LibType::Name(extern_name) = &element.lib_name{
-                            if type_split[0].to_string().eq(extern_name.as_str()) {
-                                let mut arg : Vec<(String,i32,String)>  = Vec::new();
-                                arg.push(("self".to_string(), symbol_id , _type.to_string()));
-                                println!("method {:?} {:?}", key, arg);
-                                self.search(&element, &element.item_list, &key[type_split[0].len()+1 ..] , tid, block.clone(), upper_idtf.clone(), arg);
-                            }
-                        }
+                            
+                        self.search(&element, &element.item_list , &key[split[0].len()+1 ..],tid , block.clone(), _type.to_string()  ,arg.clone());
                     }
 
 				    //key = split.last().unwrap();
-				}
-				let mut idtf = str::replace(idtf, &format!(".{}",key), "");
-
-				if idtf.contains("self") {
-					idtf = idtf.replace("self", &upper_idtf);
 				}
 
 				if key.eq("lock") {
@@ -431,7 +432,7 @@ impl FileVector {
                                         key.push_str("::");
                                     }
                                 }
-                                self.search(&element, &element.item_list, &key , tid, block.clone(), idtf.clone(), Vec::new());
+                                self.search(&element, &element.item_list, &key , tid, block.clone(),String::from("") ,arguments.clone());
                             }
                             
                         }
@@ -440,14 +441,14 @@ impl FileVector {
                 
 			}
 			else if kind.eq("let_declaration") {
-				println!("LET DCLR : {}",  &code[x.start_byte()..x.end_byte()]);
+				//println!("LET DCLR : {}",  &code[x.start_byte()..x.end_byte()]);
 				self.store_symbol(&x, &code, &mut symbol_table);
-				println!("AFTER UPDATING SYMBOL TABLE : {:?}", symbol_table);
+			//	println!("AFTER UPDATING SYMBOL TABLE : {:?}", symbol_table);
 			}
 
 		}
 	}
-	fn search(&self, file: &File, list: &Vec<ItemType>, key: &str, tid: i32, block_id: String, idtf: String, arguments : Vec<(String,i32,String)>) {
+	fn search(&self, file: &File, list: &Vec<ItemType>, key: &str, tid: i32, block_id: String, _type : String ,arguments : Vec<(String,i32,String)>) {
         if key.contains("::") {
 			let split: Vec<&str> = key.split("::").collect();
             for item in list {
@@ -461,7 +462,7 @@ impl FileVector {
                                     key.push_str("::");
                                 }
                             }
-			                self.search(&file, &new_list, &key, tid, block_id.clone(), idtf.clone(), Vec::new());	
+			                self.search(&file, &new_list, &key, tid, block_id.clone(), split[0].to_string() ,arguments.clone());	
                         }
                     },
                     _ => {},
@@ -473,14 +474,10 @@ impl FileVector {
         else {
             for item in list {
                 match item {
-                    ItemType::Func(name, ret) => {
+                    ItemType::Func(name, ret,arg)=> {
                         if key.eq(name) {
                             //println!("matched name : {}", name);
                             let mut block_key = key.clone();
-                            if key.contains("::") {
-                                let split: Vec<&str> = key.split("::").collect();
-                                block_key = split.last().unwrap();
-                            }		
                             //println!("search -> {} ", block_key);
                             match self.find_block(&file.ast, block_key, &file.code) {
                                 Some(block) => {
@@ -489,7 +486,7 @@ impl FileVector {
                                         block_count = block_count + 1;
                                         bc = block_count;
                                     }
-                                    self.traverse_block(&block, &file.code, tid, format!("{}-{}", block_id.clone(), bc), idtf.clone(), Vec::new());
+                                    self.traverse_block(&block, &file.code, tid, format!("{}-{}", block_id.clone(), bc), arguments.clone());
                                 }
                                 _ => {
                                     //println!("KEY -> {}",block_key);
@@ -499,7 +496,7 @@ impl FileVector {
                         }
                     }
                     ItemType::ImplFunc(new_list, name) => { //ImplFun(new_list, Counter)   key : Counter::new()  
-                        self.search(&file, &new_list, &key, tid, block_id.clone(), idtf.clone(), Vec::new());	
+                        self.search(&file, &new_list, &key, tid, block_id.clone(), _type.clone(),arguments.clone());	
                     }
                     _ => {}
                 }
@@ -566,7 +563,7 @@ impl FileVector {
 
 		for item in list {
 			match item {
-				ItemType::Func(name, ret) => {
+				ItemType::Func(name, ret,arg) => {
 					//println!("key : {} vs name : {}", key, name);
 					if key.eq(name) {
 						return_value = ret.to_string();
