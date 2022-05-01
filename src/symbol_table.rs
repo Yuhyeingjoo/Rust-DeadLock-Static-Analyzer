@@ -35,12 +35,12 @@ impl symbolTable {
 		//println!("CURRENT STATE OF ST: {:?}", self);
        for element in &self.symbolVec {
            if element.0.eq(name){
-			   println!("COMPARE PARAM : {} and EL : {}", name, element.0);
+			   //println!("COMPARE PARAM : {} and EL : {}", name, element.0);
                 return (&element.0.as_str(), element.1, &element.2.as_str());
                     
            }
        } 
-       panic!("no such symbol!");
+       ("",-1,"")
     }
     pub fn appendArc(&mut self, name : String, target : String) {
         for element in &self.symbolVec{

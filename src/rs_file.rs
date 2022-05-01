@@ -62,6 +62,7 @@ impl ItemType {
         }
         _item_list
     }
+
     fn argument_handle(node : &Node<'_>, code : &String)  -> Vec<String> {
             let argu_node = node.child_by_field_name("parameters");
             let mut func_argu = String::from("");
@@ -152,6 +153,7 @@ impl File {
             item_list : _item_list,
         }
     }
+    
 }
 
 
@@ -330,20 +332,49 @@ impl FileVector {
 			}
 		}
 	}
+    fn flow_argument(&self, node : &Node<'_>, code : &str, table: &symbol_table::symbolTable ) ->Vec<(String, i32, String)>  {
+        let mut ret_vec : Vec<(String,i32, String)> = Vec::new();
+        println!("{}", &code[node.start_byte() .. node.end_byte()]);
+        let func_name_node = node.child(0).unwrap();
+        let exp = &code[func_name_node.start_byte() ..func_name_node.end_byte()];
+        let argu_node = node.child_by_field_name("arguments");
+        match argu_node {
+            Some(ch) =>{
+                let child_num  = ch.child_count();
+                for i in 1 .. child_num-1 {
+                    let arg = ch.child(i).unwrap();
+                    let func_argu = &code[arg.start_byte()..arg.end_byte()];
+                    let (_, id, _typo) = table.get(func_argu);
+                    ret_vec.push(("".to_string(), id, _typo.to_string()));
+                    //println!("{} {} {} ", func_argu,id, _typo);
+                    if id !=-1{
+                        for element in & * self.file_vec {
+                            let (_, mut arg_vec) = self.find_function(&element, &element.item_list, exp , &table);
 
+                            if arg_vec.len() > 0 {
+                                for j in 0 .. arg_vec.len() {
+                                    let (name , id , _type) = ret_vec[j].clone();
+                                    ret_vec[j] = (arg_vec[j].clone(), id, _type);
+                                }
+                                return ret_vec;
+                            }
+                        }
+                        //println!("{:?} {} {} {}",table, func_argu,id , _typo);
+                        
+                    }
+
+                }
+                ret_vec
+            },
+            None =>{ret_vec},
+        }
+    }
 	fn traverse_block(&self, node: &tree_sitter::Node, code: &str, tid: i32, block: String, arguments :Vec<(String, i32, String)>) {
         let mut symbol_table = symbol_table::symbolTable::new();
 
-		/*
-		//여기서 append 사용하지 않은 이유가 있는지?
-		//id는 symbol table 내부에서 관리하는걸로 알고있는데 직접 넣어주는 이유는?
-		for i in 0..arguments.len() {
-			symbol_table.symbolVec.push(arguments[i].clone());
-        }
-		*/
 		for arg in &arguments {
 			let (name, id, _type) = arg;
-			symbol_table.append(name.to_string(), _type.to_string());
+			symbol_table.symbolVec.push((name.to_string(), *id, _type.to_string()));
 		}
 
 		let mut limit = 0;
@@ -357,7 +388,6 @@ impl FileVector {
 				let idtf = key.clone();
 
 				println!("CALL EXPR : {}", key);
-
 				if key.eq("thread::spawn") {
 					let t_block = x.child(1).unwrap();
 					limit = t_block.end_byte();
@@ -381,39 +411,33 @@ impl FileVector {
 
                 //println!("{}",key);
 				if key.contains(".") {
-					let split: Vec<&str> = key.split(".").collect();
-                    //let  mut _type   = String::from("");
-                    //let mut symbol_id  = 0;
+                    println!("method call {} {:?} ",key, symbol_table );
 
-					/* symbolVec 이 private이라 접근 안됨
-                    for element in &symbol_table.symbolVec{
-                        if element.0.eq(split[0]){
-                            _type = element.2.clone(); 
-                            symbol_id  = element.1;
-                        }
-					}
-					*/
-					//println!("IN ST : {:?}", symbol_table);
-					//println!("******get -> {:?}", split[0]);
+					let split: Vec<&str> = key.split(".").collect();
 					let (_, symbol_id, _type) = symbol_table.get(split[0]);
 
                     //println!("type split {:?} {:?}", _type, split);
                     let mut arg = Vec::new();
                     arg.push(("self".to_string(), symbol_id, _type.to_string()));
                     for element in & * self.file_vec{
-                            
                         self.search(&element, &element.item_list , &key[split[0].len()+1 ..],tid , block.clone(), _type.to_string()  ,arg.clone());
                     }
+				    key = split.last().unwrap();
+                    if key.eq("lock") {
+                        let mut idtf = format!("{}", symbol_id).to_string();
+                        for j in 1 .. split.len()-1{
+                            idtf.push_str("-");
+                            idtf.push_str(split[j]);
+                        }
+				    	println!("lock");
+				    	println!("tid : {} {} {} {}",tid,idtf , key, block);
+				    	self.sender.send((tid, idtf.to_string(), block.clone(), key.to_string()));
 
-				    //key = split.last().unwrap();
+				    }
+
 				}
 
-				if key.eq("lock") {
-					println!("lock");
-					println!("tid : {} {}.{} {}",tid, idtf,key, block);
-					self.sender.send((tid, idtf.to_string(), block.clone(), key.to_string()));
-				}
-                if  key.contains("::"){
+                else if  key.contains("::"){
 
 					let split: Vec<&str> = key.split("::").collect();
                     let lib_name = split[0];
@@ -438,12 +462,15 @@ impl FileVector {
                         }
                     }
                 }
-                
+			    else {
+                   self.search(&self.file_vec[0], &self.file_vec[0].item_list, &key, tid, block.clone(),  String::from(""), self.flow_argument(x, code, &symbol_table));
+                }	
+                               
 			}
 			else if kind.eq("let_declaration") {
 				//println!("LET DCLR : {}",  &code[x.start_byte()..x.end_byte()]);
 				self.store_symbol(&x, &code, &mut symbol_table);
-			//	println!("AFTER UPDATING SYMBOL TABLE : {:?}", symbol_table);
+				//println!("AFTER UPDATING SYMBOL TABLE : {:?}", symbol_table);
 			}
 
 		}
@@ -542,24 +569,36 @@ impl FileVector {
 		let mut symbol_type = String::from("");
 		if value_str.contains("::"){
 			let split: Vec<&str> = value_str.split("::").collect();
-			let lib_name = split[0];
-			for element in & * self.file_vec { 
-				if let LibType::Name(extern_name) = &element.lib_name{
-					if lib_name.to_string().eq(extern_name.as_str()) {
-						symbol_type = self.find_return_type(&element, &element.item_list, &value_str[lib_name.len()+2 ..]);
-					}
-				}
-			}
-		}
-		//println!("return type : {}", symbol_type);
+		    value_str = &value_str[split[0].len() + 2 ..];
+        }
+        for element in & * self.file_vec {
+            (symbol_type, _) = self.find_function(&element, &element.item_list, value_str, &symbol_table);
+        }
+        //println!("return type : {}", symbol_type);
 		//println!("");
 
 		symbol_table.append(var_str.to_string(), symbol_type);
 		//println!("{:?}", symbol_table);
 	}
 
-	fn find_return_type(&self, file: &File, list: &Vec<ItemType>, key: &str) -> String {
-		let mut return_value = String::from("");
+	fn find_function(&self, file: &File, list: &Vec<ItemType>, key: &str, st: &symbol_table::symbolTable) -> (String, Vec<String>) {
+		let mut struct_name = "";
+        let mut key = key.clone();
+
+        if key.contains("::") {
+            let split: Vec<&str> = key.split("::").collect();
+            struct_name = split[0];
+            key = split[1];
+        } else if key.contains(".") {
+            let split: Vec<&str> = key.split(".").collect();
+            let instance_name = split[0];
+            key = split[1];
+            let (_type, _, _) = st.get(key);
+            struct_name = _type;
+        }
+
+        let mut return_value = String::from("");
+        let mut return_arg : Vec<String> = Vec::new();
 
 		for item in list {
 			match item {
@@ -567,19 +606,23 @@ impl FileVector {
 					//println!("key : {} vs name : {}", key, name);
 					if key.eq(name) {
 						return_value = ret.to_string();
+                        return_arg = arg.clone();
 					}
 				}
 				ItemType::ImplFunc(new_list, name) => {
-					let re = self.find_return_type(&file, &new_list, &key);
-					if re.ne("") {
-						return_value = re;
-					}
+                    if name.eq(struct_name) {
+					    let (_type, arg) = self.find_function(&file, &new_list, &key, &st);
+					    if _type.ne("") {
+					    	return_value = _type;
+					    }
+                        return_arg = arg.clone();
+                    }
 				}
 				_ => {
 				}
 			}
 		}
-		return_value
+		(return_value, return_arg)
 	}	
 }
 
