@@ -41,6 +41,10 @@ impl GraphMaker {
 
     }
     
+    
+    
+    
+    
     fn make_graph(&mut self, gnode : GNode){
         let new_lock_name = gnode.lockName.clone();
         self.add_to_graph(gnode);

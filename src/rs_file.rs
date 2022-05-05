@@ -411,7 +411,7 @@ impl FileVector {
 
                 //println!("{}",key);
 				if key.contains(".") {
-                    println!("method call {} {:?} ",key, symbol_table );
+                    //println!("method call {} {:?} ",key, symbol_table );
 
 					let split: Vec<&str> = key.split(".").collect();
 					let (_, symbol_id, _type) = symbol_table.get(split[0]);
@@ -424,14 +424,21 @@ impl FileVector {
                     }
 				    key = split.last().unwrap();
                     if key.eq("lock") {
-                        let mut idtf = format!("{}", symbol_id).to_string();
-                        for j in 1 .. split.len()-1{
-                            idtf.push_str("-");
-                            idtf.push_str(split[j]);
+                        let mut idtf = String::from("");
+                        if symbol_id ==-1 {
+                            idtf=split[0].to_string();
+                        }
+                        else {
+                            idtf = format!("{}", symbol_id).to_string();
+                            for j in 1 .. split.len()-1{
+                                idtf.push_str("-");
+                                idtf.push_str(split[j]);
+                            }
+
                         }
 				    	println!("lock");
 				    	println!("tid : {} {} {} {}",tid,idtf , key, block);
-				    	self.sender.send((tid, idtf.to_string(), block.clone(), key.to_string()));
+				    	self.sender.send((tid, idtf, block.clone(), key.to_string()));
 
 				    }
 
