@@ -334,7 +334,7 @@ impl FileVector {
 	}
     fn flow_argument(&self, node : &Node<'_>, code : &str, table: &symbol_table::symbolTable ) ->Vec<(String, i32, String)>  {
         let mut ret_vec : Vec<(String,i32, String)> = Vec::new();
-        println!("{}", &code[node.start_byte() .. node.end_byte()]);
+        //println!("{}", &code[node.start_byte() .. node.end_byte()]);
         let func_name_node = node.child(0).unwrap();
         let exp = &code[func_name_node.start_byte() ..func_name_node.end_byte()];
         let argu_node = node.child_by_field_name("arguments");
@@ -385,7 +385,7 @@ impl FileVector {
 
 				let call_node = x.child(0).unwrap();
 				let mut key = &code[call_node.start_byte()..call_node.end_byte()];
-				let key_without_newline = erase_newline(key);
+				let key_without_newline = erase_space(key);
 				key = &key_without_newline;
 				let idtf = key.clone();
 
@@ -428,7 +428,7 @@ impl FileVector {
 				    key = split.last().unwrap();
 					//println!("key = {}",key);
 					//println!("SPLIT = {:?}", split);
-                    if key.eq("lock") {
+                    if key.eq("lock") || key.eq("read") || key.eq("write") {
                         let mut idtf = String::from("");
                         if symbol_id ==-1 {
                             idtf=split[0].to_string();
@@ -656,9 +656,10 @@ fn is_rust(entry:&DirEntry) -> bool{
     return entry.file_name().to_str().unwrap().ends_with(".rs")
 }
 
-fn erase_newline(s : &str) -> String {
+fn erase_space(s : &str) -> String {
 	let mut s = s.to_string();
 	s = s.replace("\n", "");
 	s = s.replace("\t", "");
+	s = s.replace(" ", "");
 	s
 }
