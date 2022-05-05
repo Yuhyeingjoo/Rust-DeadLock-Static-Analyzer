@@ -51,13 +51,13 @@ impl ItemType {
                 _item_list.push(item_type);
             }
 			if element.kind().eq("impl_item") {
-				let name = match element.child(1) {
+				let name = match element.child_by_field_name("type") {
 					Some(ch) => {
 						code[ch.start_byte()..ch.end_byte()].to_string()
 					}
 					None => { panic!("impl item error") }
 				};
-				_item_list.push(ItemType::ImplFunc(ItemType::new_vec(&element.child(2).unwrap(), &code, name.clone()), name));
+				_item_list.push(ItemType::ImplFunc(ItemType::new_vec(&element.child_by_field_name("body").unwrap(), &code, name.clone()), name));
 			}
         }
         _item_list
