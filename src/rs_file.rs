@@ -385,9 +385,11 @@ impl FileVector {
 
 				let call_node = x.child(0).unwrap();
 				let mut key = &code[call_node.start_byte()..call_node.end_byte()];
+				let key_without_newline = erase_newline(key);
+				key = &key_without_newline;
 				let idtf = key.clone();
 
-				println!("CALL EXPR : {}", key);
+				//println!("CALL EXPR : {}", key);
 				if key.eq("thread::spawn") {
 					let t_block = x.child(1).unwrap();
 					limit = t_block.end_byte();
@@ -419,10 +421,13 @@ impl FileVector {
                     //println!("type split {:?} {:?}", _type, split);
                     let mut arg = Vec::new();
                     arg.push(("self".to_string(), symbol_id, _type.to_string()));
+					//println!("self -> {}", _type.to_string());
                     for element in & * self.file_vec{
                         self.search(&element, &element.item_list , &key[split[0].len()+1 ..],tid , block.clone(), _type.to_string()  ,arg.clone());
                     }
 				    key = split.last().unwrap();
+					//println!("key = {}",key);
+					//println!("SPLIT = {:?}", split);
                     if key.eq("lock") {
                         let mut idtf = String::from("");
                         if symbol_id ==-1 {
@@ -434,10 +439,13 @@ impl FileVector {
                                 idtf.push_str("-");
                                 idtf.push_str(split[j]);
                             }
-
                         }
-				    	println!("lock");
-				    	println!("tid : {} {} {} {}",tid,idtf , key, block);
+				    	println!("**********LOCK DETECTED*********");
+				    	//println!("tid : {} {} {} {}",tid,idtf , key, block);
+						println!("tid : {}", tid);
+						println!("idtf : {}", idtf);
+						println!("key : {}", key);
+						println!("block id : {}", block);
 				    	self.sender.send((tid, idtf, block.clone(), key.to_string()));
 
 				    }
@@ -648,3 +656,9 @@ fn is_rust(entry:&DirEntry) -> bool{
     return entry.file_name().to_str().unwrap().ends_with(".rs")
 }
 
+fn erase_newline(s : &str) -> String {
+	let mut s = s.to_string();
+	s = s.replace("\n", "");
+	s = s.replace("\t", "");
+	s
+}
