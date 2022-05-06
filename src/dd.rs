@@ -1,6 +1,9 @@
+use petgraph::Outgoing;
 use std::sync::mpsc::{Receiver};
 use petgraph::algo::is_cyclic_directed;
 use petgraph::{Graph,algo};
+use petgraph::graph::NodeIndex;
+use petgraph::visit::Dfs;
 pub struct GraphMaker {
     recv : Receiver <(i32, String,String,String)>,
     graph : Graph<GNode, Edge>,
@@ -10,12 +13,28 @@ struct GNode {
     lockName: String,
     tidBlock : Vec<(i32,String)>,
     primitive : String,
+    visit : i32,
 }
+#[derive(Debug)]
 struct Edge{
-
+    rw : EdgeInfo
+}
+#[derive(Debug)]
+enum EdgeInfo {
+   None,
+   lock_info(GNode),
 }
 
-
+impl GNode {
+    fn clone(&self) -> Self {
+        Self {
+            lockName : self.lockName.clone(),
+            tidBlock : self.tidBlock.clone(),
+            primitive : self.primitive.clone(),
+            visit : self.visit,
+        }
+    }
+}
 impl GraphMaker {
     pub fn new(rec : Receiver<(i32,String,String, String)>)->Self{
         let mut Graph = Graph::<GNode,Edge>::new();
@@ -27,13 +46,14 @@ impl GraphMaker {
     pub fn run(&mut self) {
         loop {
             let received : (i32, String, String, String) = self.recv.recv().unwrap();
-            //println!("RECEIVED {:?}",received);
+            println!("**************RECEIVED {:?}",received);
             let mut tidVec : Vec<(i32,String)>  = Vec::new();
             tidVec.push((received.0, received.2));
             let gnode_bowl = GNode {
                 lockName : received.1,
                 tidBlock : tidVec,
                 primitive : received.3,
+                visit : 0,
             };
             self.make_graph(gnode_bowl);
 
@@ -42,15 +62,88 @@ impl GraphMaker {
     }
     
     
-    
-    
+    fn dfs(&mut self, n : NodeIndex, mut  path : Vec<(String, bool)>) -> bool{
+        {
+            let cur  = self.graph.node_weight_mut(n).unwrap();
+            println!("From {:?}",cur);
+            cur.visit = 1;
+            if !cur.primitive.eq("lock"){
+                let mut is_write : bool = false;
+                if cur.primitive.eq("write"){
+                    is_write = true;
+                }
+                path.push((cur.lockName.clone(), is_write ));
+            }
+        }
+        println!("Vector {:?}",path);
+        let mut ret_val = false;
+        let mut nodes = self.graph.neighbors_directed(n, Outgoing).detach();
+        while let Some(node) = nodes.next_node(&self.graph){
+            let mut cur_visit =0;
+            let mut lock_name  = String::from("");
+            let mut lock_primitive = String::from("");
+            {
+            let cur  = self.graph.node_weight_mut(node).unwrap();
+            println!("To {:?}",cur);
+            lock_name = cur.lockName.clone();
+            cur_visit = cur.visit;
+            lock_primitive = cur.primitive.clone();
+            }
+            if lock_primitive.eq("lock"){
+                if cur_visit==1 {
+                    println!("Deadlock on {}",lock_name);
+                    return true;
+                }          
+                else if cur_visit ==0{
+                    ret_val = self.dfs(node, path.clone());
+                }
+
+            }
+            else {
+                if cur_visit ==0 {
+                    let edge=self.graph.find_edge(n,node).unwrap();
+                    if let EdgeInfo::lock_info(e_gnode) = &self.graph.edge_weight(edge).unwrap().rw{
+                        println!("Edge :: {:?}", e_gnode);
+                        let mut is_write : bool = false;
+                        let mut arg_path = path.clone();
+                        if e_gnode.primitive.eq("write"){
+                            is_write = true;
+                        }
+                        arg_path.push((e_gnode.lockName.clone(), is_write));
+                        ret_val = self.dfs(node, arg_path);
+                    }
+                }
+            
+            }
+
+        }
+        {
+            let cur  = self.graph.node_weight_mut(n).unwrap();
+            cur.visit = 0;
+        }
+        return ret_val;
+
+    }
+    fn search(&mut self) {
+        let end = self.graph.node_count() ;
+        //let cur_visit  = self.graph.node_weight_mut(NodeIndex::new(end)).unwrap().visit;
+        for n in 0 .. end {
+            if self.dfs(NodeIndex::new(n), Vec::new()){
+                break;
+            }
+        }
+
+    }
     
     fn make_graph(&mut self, gnode : GNode){
         let new_lock_name = gnode.lockName.clone();
         self.add_to_graph(gnode);
+        /*
         if is_cyclic_directed(&self.graph){
             println!("Deadlock! on {}",new_lock_name);
         }
+        */
+        self.search();
     }
 
     fn add_to_graph(&mut self, gnode:GNode) {
@@ -62,7 +155,18 @@ impl GraphMaker {
             Some(existing) =>{
                 if GraphMaker::compare_block(&gnode.tidBlock[0], &self.graph.node_weight(existing).unwrap().tidBlock){
                     //println!("self lock {}",&gnode.lockName);
-                    self.graph.add_edge(existing, existing, Edge{});
+                    if gnode.primitive.eq("lock") {
+                        self.graph.add_edge(existing, existing, 
+                                            Edge{
+                                                rw : EdgeInfo::None,
+                                            });
+                    }
+                    else {
+                        self.graph.add_edge(existing, existing, 
+                                            Edge{
+                                                rw : EdgeInfo::lock_info(gnode),
+                                            });
+                    }
 
                 }
                 else if GraphMaker::compare_TID(&gnode.tidBlock[0], &self.graph.node_weight(existing).unwrap().tidBlock){
@@ -81,12 +185,26 @@ impl GraphMaker {
                                      &self.graph.node_weight(element).unwrap().tidBlock,
                                      &self.graph.node_weight(existing).unwrap().tidBlock);
                             */
-							 self.graph.add_edge(element,existing, Edge{});
+                            let gnode_primitive = gnode.primitive.clone();
+                            if gnode_primitive.eq("lock") {
+                                self.graph.add_edge(element, existing, 
+                                                    Edge{
+                                                        rw : EdgeInfo::None,
+                                                    });
+                                break;
+                            }
+                            else {
+                                self.graph.add_edge(element, existing, 
+                                                    Edge{
+                                                        rw : EdgeInfo::lock_info(gnode),
+                                                    });
+                                break;
+                            }
 							
                         }
 
                     }
-                    self.graph.node_weight_mut(existing).unwrap().tidBlock.push(gnode.tidBlock[0].clone());
+                    self.graph.node_weight_mut(existing).unwrap().tidBlock.push(gnodeTup);
                 }
                 else{
 
@@ -102,12 +220,26 @@ impl GraphMaker {
                                      &self.graph.node_weight(element).unwrap().tidBlock,
                                      &self.graph.node_weight(existing).unwrap().tidBlock);
 							*/
-							self.graph.add_edge(element,existing, Edge{});
+                            let gnode_primitive = gnode.primitive.clone();
+                            if gnode_primitive.eq("lock") {
+                                self.graph.add_edge(element, existing, 
+                                                    Edge{
+                                                        rw : EdgeInfo::None,
+                                                    });
+                                break;
+                            }
+                            else {
+                                self.graph.add_edge(element, existing, 
+                                                    Edge{
+                                                        rw : EdgeInfo::lock_info(gnode),
+                                                    });
+                                break;
+                            }
 
                         }
                     
                    }
-                    self.graph.node_weight_mut(existing).unwrap().tidBlock.push(gnode.tidBlock[0].clone());
+                    self.graph.node_weight_mut(existing).unwrap().tidBlock.push(gnodeTup);
                     //println!("pushed {:?}", self.graph.node_weight_mut(existing).unwrap());
                 }
             },
@@ -115,7 +247,7 @@ impl GraphMaker {
                 let gnodeTup = gnode.tidBlock[0].clone();
                 let iterNode = self.graph.node_indices();
                 //println!("Added {:?}", gnode);
-                let added_node = self.graph.add_node(gnode);
+                let added_node = self.graph.add_node(gnode.clone());
                 for element in iterNode {
                     if GraphMaker::compare_block(&gnodeTup, &self.graph.node_weight(element).unwrap().tidBlock){
 							/*
@@ -126,7 +258,20 @@ impl GraphMaker {
                                      &self.graph.node_weight(element).unwrap().tidBlock,
                                      &self.graph.node_weight(added_node).unwrap().tidBlock);
 							*/
-                        self.graph.add_edge(element,added_node, Edge{});
+                            if gnode.primitive.eq("lock") {
+                                self.graph.add_edge(element, added_node, 
+                                                    Edge{
+                                                        rw : EdgeInfo::None,
+                                                    });
+                                break;
+                            }
+                            else {
+                                self.graph.add_edge(element, added_node, 
+                                                    Edge{
+                                                        rw : EdgeInfo::lock_info(gnode),
+                                                    });
+                                break;
+                            }
                     }
                 
                }

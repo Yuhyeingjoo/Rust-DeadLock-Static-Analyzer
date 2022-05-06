@@ -440,12 +440,14 @@ impl FileVector {
                                 idtf.push_str(split[j]);
                             }
                         }
+                        /*
 				    	println!("**********LOCK DETECTED*********");
 				    	//println!("tid : {} {} {} {}",tid,idtf , key, block);
 						println!("tid : {}", tid);
 						println!("idtf : {}", idtf);
 						println!("key : {}", key);
 						println!("block id : {}", block);
+                        */
 				    	self.sender.send((tid, idtf, block.clone(), key.to_string()));
 
 				    }
