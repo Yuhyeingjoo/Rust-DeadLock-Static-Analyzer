@@ -12,7 +12,7 @@ pub struct GraphMaker {
 struct GNode {
     lockName: String,
     tidBlock : Vec<(i32,String)>,
-    primitive : String,
+    primitive : Vec<String>,
     visit : i32,
 }
 #[derive(Debug)]
@@ -49,10 +49,12 @@ impl GraphMaker {
             println!("**************RECEIVED {:?}",received);
             let mut tidVec : Vec<(i32,String)>  = Vec::new();
             tidVec.push((received.0, received.2));
+            let mut prim_vec : Vec<String> = Vec::new();
+            prim_vec.push(received.3);
             let gnode_bowl = GNode {
                 lockName : received.1,
                 tidBlock : tidVec,
-                primitive : received.3,
+                primitive : prim_vec,
                 visit : 0,
             };
             self.make_graph(gnode_bowl);
@@ -67,12 +69,14 @@ impl GraphMaker {
             let cur  = self.graph.node_weight_mut(n).unwrap();
             println!("From {:?}",cur);
             cur.visit = 1;
-            if !cur.primitive.eq("lock"){
-                let mut is_write : bool = false;
-                if cur.primitive.eq("write"){
-                    is_write = true;
+            if !&cur.primitive[0].eq("lock"){
+                for element in &cur.primitive {
+                    let mut is_write : bool = false;
+                    if element.eq("write"){
+                        is_write = true;
+                    }
+                        path.push((cur.lockName.clone(), is_write ));
                 }
-                path.push((cur.lockName.clone(), is_write ));
             }
         }
         println!("Vector {:?}",path);
@@ -81,7 +85,7 @@ impl GraphMaker {
         while let Some(node) = nodes.next_node(&self.graph){
             let mut cur_visit =0;
             let mut lock_name  = String::from("");
-            let mut lock_primitive = String::from("");
+            let mut lock_primitive = Vec::new();
             {
             let cur  = self.graph.node_weight_mut(node).unwrap();
             println!("To {:?}",cur);
@@ -89,7 +93,7 @@ impl GraphMaker {
             cur_visit = cur.visit;
             lock_primitive = cur.primitive.clone();
             }
-            if lock_primitive.eq("lock"){
+            if lock_primitive[0].eq("lock"){
                 if cur_visit==1 {
                     println!("Deadlock on {}",lock_name);
                     return true;
@@ -100,17 +104,24 @@ impl GraphMaker {
 
             }
             else {
-                if cur_visit ==0 {
                     let edge=self.graph.find_edge(n,node).unwrap();
+                    let mut is_write : bool = false;
+                    let mut arg_path = path.clone();
                     if let EdgeInfo::lock_info(e_gnode) = &self.graph.edge_weight(edge).unwrap().rw{
                         println!("Edge :: {:?}", e_gnode);
-                        let mut is_write : bool = false;
-                        let mut arg_path = path.clone();
-                        if e_gnode.primitive.eq("write"){
+                        if e_gnode.primitive[0].eq("write"){
                             is_write = true;
                         }
                         arg_path.push((e_gnode.lockName.clone(), is_write));
+                    }
+                if cur_visit ==0 {
                         ret_val = self.dfs(node, arg_path);
+                    }
+                else {
+                    println!("*******************************************cycle!!\n{:?}",path);
+                    if GraphMaker::check(&path){
+                        println!("Deadlock on {}",lock_name);
+                        return true;
                     }
                 }
             
@@ -123,6 +134,35 @@ impl GraphMaker {
         }
         return ret_val;
 
+    }
+    fn check( path :& Vec<(String,bool)>) -> bool{
+            let mut rw_list : Vec<(String,bool)> = Vec::new();
+            for element in path {
+                let mut has = false;
+                for l_element in &mut rw_list {
+                    if element.0.eq(l_element.0.as_str()){
+                        if !l_element.1 && element.1 {
+                            l_element.1 = true;
+                        }
+                        has = true;
+                        break;    
+                    }
+                }
+
+                if !has {
+                    rw_list.push(element.clone());
+                    println!("rw_list {:?}",rw_list);
+                }
+            }
+            
+            let mut ret_val = true;
+
+            for element in rw_list {
+                if !element.1 {
+                    ret_val =false;
+                }    
+            }
+            ret_val
     }
     fn search(&mut self) {
         let end = self.graph.node_count() ;
@@ -155,7 +195,7 @@ impl GraphMaker {
             Some(existing) =>{
                 if GraphMaker::compare_block(&gnode.tidBlock[0], &self.graph.node_weight(existing).unwrap().tidBlock){
                     //println!("self lock {}",&gnode.lockName);
-                    if gnode.primitive.eq("lock") {
+                    if gnode.primitive[0].eq("lock") {
                         self.graph.add_edge(existing, existing, 
                                             Edge{
                                                 rw : EdgeInfo::None,
@@ -172,6 +212,8 @@ impl GraphMaker {
                 else if GraphMaker::compare_TID(&gnode.tidBlock[0], &self.graph.node_weight(existing).unwrap().tidBlock){
                     let iterNode = self.graph.node_indices();
                     let gnodeTup = gnode.tidBlock[0].clone();
+                    let gnode_prim = gnode.primitive[0].clone();
+
                     //println!("same lock different block {}", &gnode.lockName);
                     //println!("Added {:?}", gnode);
                     //let added_node = self.graph.add_node(gnode);
@@ -185,7 +227,7 @@ impl GraphMaker {
                                      &self.graph.node_weight(element).unwrap().tidBlock,
                                      &self.graph.node_weight(existing).unwrap().tidBlock);
                             */
-                            let gnode_primitive = gnode.primitive.clone();
+                            let gnode_primitive = gnode.primitive[0].clone();
                             if gnode_primitive.eq("lock") {
                                 self.graph.add_edge(element, existing, 
                                                     Edge{
@@ -205,10 +247,12 @@ impl GraphMaker {
 
                     }
                     self.graph.node_weight_mut(existing).unwrap().tidBlock.push(gnodeTup);
+                    self.graph.node_weight_mut(existing).unwrap().primitive.push(gnode_prim);
                 }
                 else{
 
                     let gnodeTup = gnode.tidBlock[0].clone();
+                    let gnode_prim = gnode.primitive[0].clone();
                     let iterNode = self.graph.node_indices();
                     for element in iterNode {
                         if GraphMaker::compare_block(&gnodeTup, &self.graph.node_weight(element).unwrap().tidBlock){
@@ -220,7 +264,7 @@ impl GraphMaker {
                                      &self.graph.node_weight(element).unwrap().tidBlock,
                                      &self.graph.node_weight(existing).unwrap().tidBlock);
 							*/
-                            let gnode_primitive = gnode.primitive.clone();
+                            let gnode_primitive = gnode.primitive[0].clone();
                             if gnode_primitive.eq("lock") {
                                 self.graph.add_edge(element, existing, 
                                                     Edge{
@@ -240,6 +284,7 @@ impl GraphMaker {
                     
                    }
                     self.graph.node_weight_mut(existing).unwrap().tidBlock.push(gnodeTup);
+                    self.graph.node_weight_mut(existing).unwrap().primitive.push(gnode_prim);
                     //println!("pushed {:?}", self.graph.node_weight_mut(existing).unwrap());
                 }
             },
@@ -258,7 +303,7 @@ impl GraphMaker {
                                      &self.graph.node_weight(element).unwrap().tidBlock,
                                      &self.graph.node_weight(added_node).unwrap().tidBlock);
 							*/
-                            if gnode.primitive.eq("lock") {
+                            if gnode.primitive[0].eq("lock") {
                                 self.graph.add_edge(element, added_node, 
                                                     Edge{
                                                         rw : EdgeInfo::None,
