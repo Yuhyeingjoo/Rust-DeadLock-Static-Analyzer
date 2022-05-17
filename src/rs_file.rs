@@ -559,10 +559,19 @@ impl FileVector {
         }
 	}
 	fn store_symbol (&self, node: &tree_sitter::Node, code: &str, symbol_table: &mut symbol_table::symbolTable) {
-		let var = node.child(1).unwrap();
+		//println!("{}", &code[node.start_byte()..node.end_byte()]);
+
+		let mut var = node.child(1).unwrap();	
+		let mut var_str = &code[var.start_byte()..var.end_byte()];
+
+		if var_str.eq("mut") {
+			var = var.next_sibling().unwrap();
+			var_str = &code[var.start_byte()..var.end_byte()];
+		}
+	//let var = node.child_by_field_name("name").unwrap();
 		let mut value = node.child_by_field_name("value").unwrap();
 
-		let mut var_str = &code[var.start_byte()..var.end_byte()];
+
 		let mut value_str = &code[value.start_byte()..value.end_byte()];
 
 		if value_str.starts_with("Arc::new(") || value_str.starts_with("Arc::clone(") {
