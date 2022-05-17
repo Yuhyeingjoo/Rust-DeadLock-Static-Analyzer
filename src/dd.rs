@@ -5,7 +5,7 @@ use petgraph::{Graph,algo};
 use petgraph::graph::NodeIndex;
 use petgraph::visit::Dfs;
 pub struct GraphMaker {
-    recv : Receiver <(i32, String,String,String)>,
+    recv : Receiver <(i32, String,String,String, String, usize)>,
     graph : Graph<GNode, Edge>,
 }
 #[derive(Debug)]
@@ -14,6 +14,8 @@ struct GNode {
     tidBlock : Vec<(i32,String)>,
     primitive : Vec<String>,
     visit : i32,
+    file_name : String,
+    line_num : usize,
 }
 #[derive(Debug)]
 struct Edge{
@@ -32,11 +34,13 @@ impl GNode {
             tidBlock : self.tidBlock.clone(),
             primitive : self.primitive.clone(),
             visit : self.visit,
+            file_name : self.file_name.clone(),
+            line_num : self.line_num,
         }
     }
 }
 impl GraphMaker {
-    pub fn new(rec : Receiver<(i32,String,String, String)>)->Self{
+    pub fn new(rec : Receiver<(i32,String,String, String, String, usize)>)->Self{
         let mut Graph = Graph::<GNode,Edge>::new();
         Self{
             recv: rec,
@@ -45,7 +49,7 @@ impl GraphMaker {
     }
     pub fn run(&mut self) {
         loop {
-            let received : (i32, String, String, String) = self.recv.recv().unwrap();
+            let received : (i32, String, String, String,String,usize) = self.recv.recv().unwrap();
             println!("**************RECEIVED {:?}",received);
             let mut tidVec : Vec<(i32,String)>  = Vec::new();
             tidVec.push((received.0, received.2));
@@ -56,15 +60,20 @@ impl GraphMaker {
                 tidBlock : tidVec,
                 primitive : prim_vec,
                 visit : 0,
+                file_name : received.4,
+                line_num : received.5
+
             };
             self.make_graph(gnode_bowl);
-
+            
         }
 
     }
     
     
-    fn dfs(&mut self, n : NodeIndex, mut  path : Vec<(String, bool)>) -> bool{
+    fn dfs(&mut self, n : NodeIndex, mut  path : Vec<(String, bool)>, mut lock_position : Vec<(String, usize)>) -> bool{
+        let mut  file_name = String::new();
+        let mut line_num : usize = 0;
         {
             let cur  = self.graph.node_weight_mut(n).unwrap();
             println!("From {:?}",cur);
@@ -78,8 +87,14 @@ impl GraphMaker {
                         path.push((cur.lockName.clone(), is_write ));
                 }
             }
+            file_name = cur.file_name.clone();
+            line_num = cur.line_num;
+            if !lock_position.contains(&(file_name.clone(), line_num)) {
+                lock_position.push((file_name, line_num));
+            }
         }
-        println!("Vector {:?}",path);
+
+        //println!("Vector {:?}",path);
         let mut ret_val = false;
         let mut nodes = self.graph.neighbors_directed(n, Outgoing).detach();
         while let Some(node) = nodes.next_node(&self.graph){
@@ -95,11 +110,11 @@ impl GraphMaker {
             }
             if lock_primitive[0].eq("lock"){
                 if cur_visit==1 {
-                    println!("Deadlock on {}",lock_name);
+                    println!("Deadlock on {} {:?}" ,lock_name, lock_position);
                     return true;
                 }          
                 else if cur_visit ==0{
-                    ret_val = self.dfs(node, path.clone());
+                    ret_val = self.dfs(node, path.clone(), lock_position.clone());
                 }
 
             }
@@ -108,17 +123,17 @@ impl GraphMaker {
                     let mut is_write : bool = false;
                     let mut arg_path = path.clone();
                     if let EdgeInfo::lock_info(e_gnode) = &self.graph.edge_weight(edge).unwrap().rw{
-                        println!("Edge :: {:?}", e_gnode);
+                        //println!("Edge :: {:?}", e_gnode);
                         if e_gnode.primitive[0].eq("write"){
                             is_write = true;
                         }
                         arg_path.push((e_gnode.lockName.clone(), is_write));
                     }
                 if cur_visit ==0 {
-                        ret_val = self.dfs(node, arg_path);
+                        ret_val = self.dfs(node, arg_path.clone(), lock_position.clone());
                     }
                 else {
-                    println!("*******************************************cycle!!\n{:?}",path);
+                    //println!("*******************************************cycle!!\n{:?}",path);
                     if GraphMaker::check(&path){
                         println!("Deadlock on {}",lock_name);
                         return true;
@@ -168,7 +183,7 @@ impl GraphMaker {
         let end = self.graph.node_count() ;
         //let cur_visit  = self.graph.node_weight_mut(NodeIndex::new(end)).unwrap().visit;
         for n in 0 .. end {
-            if self.dfs(NodeIndex::new(n), Vec::new()){
+            if self.dfs(NodeIndex::new(n), Vec::new(), Vec::new()){
                 break;
             }
         }
@@ -202,10 +217,12 @@ impl GraphMaker {
                                             });
                     }
                     else {
+                        let gnode_prim = gnode.primitive[0].clone();
                         self.graph.add_edge(existing, existing, 
                                             Edge{
                                                 rw : EdgeInfo::lock_info(gnode),
                                             });
+                        self.graph.node_weight_mut(existing).unwrap().primitive.push(gnode_prim);
                     }
 
                 }

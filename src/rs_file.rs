@@ -11,7 +11,7 @@ use tree_sitter_traversal::{traverse, Order};
 
 pub struct FileVector{
     file_vec: Vec<File>,
-	sender: Sender<(i32, String, String, String)>,
+	sender: Sender<(i32, String, String, String, String,usize)>,
 }
 
 #[derive(Debug)]
@@ -158,7 +158,7 @@ impl File {
 
 
 impl FileVector {
-    pub fn new(sender: Sender<(i32, String, String, String)>) ->Self {
+    pub fn new(sender: Sender<(i32, String, String, String,String,usize)>) ->Self {
         let file_vec : Vec<File> = Vec::new();
 
         Self{
@@ -322,10 +322,10 @@ impl FileVector {
 		
 		let main_tree = &(self.file_vec.get(0).unwrap().ast);
 		let code = &(self.file_vec.get(0).unwrap().code);
-	
+        let file_name = self.file_vec.get(0).unwrap().path.clone();	
 		match self.find_block(&main_tree, "main", &code) {
 			Some(block) => {
-				self.traverse_block(&block, &code, 0, "0".to_string(),  Vec::new());
+				self.traverse_block(&block, &code, file_name, 0,"0".to_string(),  Vec::new());
 			}
 			_ => {
 				panic!("Couldn't find main block");
@@ -369,31 +369,27 @@ impl FileVector {
             None =>{ret_vec},
         }
     }
-	fn traverse_block(&self, node: &tree_sitter::Node, code: &str, tid: i32, block: String, arguments :Vec<(String, i32, String)>) {
+	fn traverse_block(&self, node: &tree_sitter::Node, code: &str, file_name : String, tid: i32, block: String, arguments :Vec<(String, i32, String)>) {
         let mut symbol_table = symbol_table::symbolTable::new();
-
+        
 		for arg in &arguments {
 			let (name, id, _type) = arg;
 			symbol_table.symbolVec.push((name.to_string(), *id, _type.to_string()));
 		}
-
 		let mut limit = 0;
 		let mut preorder: Vec<Node<'_>> = traverse(node.walk(), Order::Pre).collect::<Vec<_>>();
 		for x in &preorder {
 			let kind = x.kind();
 			if kind.eq("call_expression") {
-
 				let call_node = x.child(0).unwrap();
 				let mut key = &code[call_node.start_byte()..call_node.end_byte()];
 				let key_without_newline = erase_space(key);
 				key = &key_without_newline;
 				let idtf = key.clone();
-
 				//println!("CALL EXPR : {}", key);
 				if key.eq("thread::spawn") {
 					let t_block = x.child(1).unwrap();
 					limit = t_block.end_byte();
-					
 					let mut new_tid = 0;
 					let mut new_bc = 0;
 					unsafe {
@@ -404,7 +400,7 @@ impl FileVector {
 						block_count = block_count + 1;
 						new_bc = block_count;
 					}
-					self.traverse_block(&t_block, &code, new_tid, format!("{}-{}",block.clone(), new_bc),  symbol_table.symbolVec.clone()); 
+					self.traverse_block(&t_block, &code,file_name.clone(), new_tid,format!("{}-{}",block.clone(), new_bc),  symbol_table.symbolVec.clone()); 
 				}
 		
 				if call_node.end_byte() < limit {
@@ -423,7 +419,7 @@ impl FileVector {
                     arg.push(("self".to_string(), symbol_id, _type.to_string()));
 					//println!("self -> {}", _type.to_string());
                     for element in & * self.file_vec{
-                        self.search(&element, &element.item_list , &key[split[0].len()+1 ..],tid , block.clone(), _type.to_string()  ,arg.clone());
+                        self.search(&element, &element.item_list,&key[split[0].len()+1 ..],tid , block.clone(), _type.to_string()  ,arg.clone());
                     }
 				    key = split.last().unwrap();
 					//println!("key = {}",key);
@@ -448,7 +444,8 @@ impl FileVector {
 						println!("key : {}", key);
 						println!("block id : {}", block);
                         */
-				    	self.sender.send((tid, idtf, block.clone(), key.to_string()));
+                        println!("Lock line file: {}  {:?}",file_name, call_node.end_position().row);
+				    	self.sender.send((tid, idtf, block.clone(), key.to_string(),file_name.clone(), call_node.end_position().row ));
 
 				    }
 
@@ -530,7 +527,7 @@ impl FileVector {
                                         block_count = block_count + 1;
                                         bc = block_count;
                                     }
-                                    self.traverse_block(&block, &file.code, tid, format!("{}-{}", block_id.clone(), bc), arguments.clone());
+                                    self.traverse_block(&block, &file.code,file.path.clone() ,tid, format!("{}-{}", block_id.clone(), bc), arguments.clone());
                                 }
                                 _ => {
                                     //println!("KEY -> {}",block_key);
