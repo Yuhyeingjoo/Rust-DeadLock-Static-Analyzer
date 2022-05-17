@@ -353,21 +353,25 @@ impl FileVector {
                     let arg = ch.child(i).unwrap();
                     let func_argu = &code[arg.start_byte()..arg.end_byte()];
                     let (_, id, _typo) = table.get(func_argu);
+
                     ret_vec.push(("".to_string(), id, _typo.to_string()));
                     //println!("{} {} {} ", func_argu,id, _typo);
+					//println!("{:?}*******", ret_vec);
                     if id !=-1{
+						//println!("CAME HERE");
                         for element in & * self.file_vec {
                             let (_, mut arg_vec) = self.find_function(&element, &element.item_list, exp , &table);
-
+							//println!("CAME HERE2 : exp = {:?}", exp);
                             if arg_vec.len() > 0 {
                                 for j in 0 .. arg_vec.len() {
                                     let (name , id , _type) = ret_vec[j].clone();
                                     ret_vec[j] = (arg_vec[j].clone(), id, _type);
+									//println!("++++++++++++++++{:?}", ret_vec);
                                 }
                                 return ret_vec;
                             }
                         }
-                        //println!("{:?} {} {} {}",table, func_argu,id , _typo);
+						//println!("{:?} {} {} {}",table, func_argu,id , _typo);
                         
                     }
 
@@ -453,6 +457,7 @@ impl FileVector {
 						println!("block id : {}", block);
                         */
                         println!("Lock : {}, file: {}  {:?}",idtf, file_name, call_node.end_position().row);
+						//println!("table : {:?}", symbol_table);
 				    	self.sender.send((tid, idtf, block.clone(), key.to_string(),file_name.clone(), call_node.end_position().row ));
 
 				    }
@@ -478,7 +483,8 @@ impl FileVector {
                                         key.push_str("::");
                                     }
                                 }
-                                self.search(&element, &element.item_list, &key , tid, block.clone(),String::from("") ,arguments.clone());
+								//self.search(&element, &element.item_list, &key , tid, block.clone(),String::from("") ,arguments.clone());
+                                self.search(&element, &element.item_list, &key , tid, block.clone(),String::from(""), self.flow_argument(x, code, &symbol_table));
                             }
                             
                         }
@@ -576,7 +582,6 @@ impl FileVector {
 			value_str = &code[value.start_byte()..value.end_byte()];
 			if value_str.starts_with("&") {
 				value_str = &value_str[1..];
-				//symbol_table.appendArc(value_str.to_string(), var_str.to_string());
 				symbol_table.appendArc(var_str.to_string(), value_str.to_string());
 				return;
 			}
@@ -609,8 +614,13 @@ impl FileVector {
 
         if key.contains("::") {
             let split: Vec<&str> = key.split("::").collect();
-            struct_name = split[0];
-            key = split[1];
+			let len = split.len();
+            //struct_name = split[0];
+            //key = split[1];
+            
+			struct_name = split[len - 2];
+            key = split[len - 1];
+
         } else if key.contains(".") {
             let split: Vec<&str> = key.split(".").collect();
             let instance_name = split[0];
