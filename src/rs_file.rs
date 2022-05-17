@@ -101,8 +101,16 @@ impl ItemType {
                     None =>{}
                 }    
                 if func_return.eq("Self") {
-                    let impl_node = node.parent().unwrap().parent().unwrap().child(1).unwrap();
-                    func_return =  code[impl_node.start_byte()..impl_node.end_byte()].to_string();
+					if let Some(for_node) = node.parent().unwrap().parent().unwrap().child(2) {
+						let for_check = code[for_node.start_byte()..for_node.end_byte()].to_string();
+						if for_check.eq("for") {
+							let impl_node = for_node.next_sibling().unwrap();
+							func_return = code[impl_node.start_byte()..impl_node.end_byte()].to_string();
+						}
+					} else {
+	                    let impl_node = node.parent().unwrap().parent().unwrap().child(1).unwrap();
+    	                func_return =  code[impl_node.start_byte()..impl_node.end_byte()].to_string();
+					}
                 }
 
                 let arg_vec = ItemType::argument_handle(node, code); 
@@ -444,7 +452,7 @@ impl FileVector {
 						println!("key : {}", key);
 						println!("block id : {}", block);
                         */
-                        println!("Lock line file: {}  {:?}",file_name, call_node.end_position().row);
+                        println!("Lock : {}, file: {}  {:?}",idtf, file_name, call_node.end_position().row);
 				    	self.sender.send((tid, idtf, block.clone(), key.to_string(),file_name.clone(), call_node.end_position().row ));
 
 				    }

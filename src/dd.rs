@@ -50,7 +50,7 @@ impl GraphMaker {
     pub fn run(&mut self) {
         loop {
             let received : (i32, String, String, String,String,usize) = self.recv.recv().unwrap();
-            println!("**************RECEIVED {:?}",received);
+            //println!("**************RECEIVED {:?}",received);
             let mut tidVec : Vec<(i32,String)>  = Vec::new();
             tidVec.push((received.0, received.2));
             let mut prim_vec : Vec<String> = Vec::new();
@@ -76,7 +76,7 @@ impl GraphMaker {
         let mut line_num : usize = 0;
         {
             let cur  = self.graph.node_weight_mut(n).unwrap();
-            println!("From {:?}",cur);
+            //println!("From {:?}",cur);
             cur.visit = 1;
             if !&cur.primitive[0].eq("lock"){
                 for element in &cur.primitive {
@@ -103,7 +103,7 @@ impl GraphMaker {
             let mut lock_primitive = Vec::new();
             {
             let cur  = self.graph.node_weight_mut(node).unwrap();
-            println!("To {:?}",cur);
+            //println!("To {:?}",cur);
             lock_name = cur.lockName.clone();
             cur_visit = cur.visit;
             lock_primitive = cur.primitive.clone();
@@ -166,7 +166,7 @@ impl GraphMaker {
 
                 if !has {
                     rw_list.push(element.clone());
-                    println!("rw_list {:?}",rw_list);
+                    //println!("rw_list {:?}",rw_list);
                 }
             }
             
