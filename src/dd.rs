@@ -192,16 +192,17 @@ impl GraphMaker {
     
     fn make_graph(&mut self, gnode : GNode){
         let new_lock_name = gnode.lockName.clone();
-        self.add_to_graph(gnode);
+        let node_index = self.add_to_graph(gnode);
         /*
         if is_cyclic_directed(&self.graph){
             println!("Deadlock! on {}",new_lock_name);
         }
         */
-        self.search();
+        //self.search();
+        self.dfs(node_index, Vec::new(), Vec::new());
     }
 
-    fn add_to_graph(&mut self, gnode:GNode) {
+    fn add_to_graph(&mut self, gnode:GNode)->NodeIndex {
         let add_or_not : bool = true;
         let SameNode = self.graph
             .node_indices().rev().find(|i| self.graph[*i].lockName == gnode.lockName);
@@ -304,6 +305,7 @@ impl GraphMaker {
                     self.graph.node_weight_mut(existing).unwrap().primitive.push(gnode_prim);
                     //println!("pushed {:?}", self.graph.node_weight_mut(existing).unwrap());
                 }
+                existing
             },
             None => {
                 let gnodeTup = gnode.tidBlock[0].clone();
@@ -321,14 +323,14 @@ impl GraphMaker {
                                      &self.graph.node_weight(added_node).unwrap().tidBlock);
 							*/
                             if gnode.primitive[0].eq("lock") {
-                                self.graph.add_edge(element, added_node, 
+                                self.graph.add_edge(element, added_node.clone(), 
                                                     Edge{
                                                         rw : EdgeInfo::None,
                                                     });
                                 break;
                             }
                             else {
-                                self.graph.add_edge(element, added_node, 
+                                self.graph.add_edge(element, added_node.clone(), 
                                                     Edge{
                                                         rw : EdgeInfo::lock_info(gnode),
                                                     });
@@ -337,6 +339,7 @@ impl GraphMaker {
                     }
                 
                }
+                added_node
             },
         }
     }
