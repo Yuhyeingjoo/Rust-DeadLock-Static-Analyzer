@@ -340,8 +340,8 @@ impl FileVector {
 			}
 		}
 	}
-    fn flow_argument(&self, node : &Node<'_>, code : &str, table: &symbol_table::symbolTable ) ->Vec<(String, i32, String)>  {
-        let mut ret_vec : Vec<(String,i32, String)> = Vec::new();
+    fn flow_argument(&self, node : &Node<'_>, code : &str, table: &symbol_table::symbolTable ) ->Vec<(String, String, String)>  {
+        let mut ret_vec : Vec<(String,String, String)> = Vec::new();
         //println!("{}", &code[node.start_byte() .. node.end_byte()]);
         let func_name_node = node.child(0).unwrap();
         let exp = &code[func_name_node.start_byte() ..func_name_node.end_byte()];
@@ -350,14 +350,22 @@ impl FileVector {
             Some(ch) =>{
                 let child_num  = ch.child_count();
                 for i in 1 .. child_num-1 {
-                    let arg = ch.child(i).unwrap();
-                    let func_argu = &code[arg.start_byte()..arg.end_byte()];
-                    let (_, id, _typo) = table.get(func_argu);
+					let arg = ch.child(i).unwrap();
+                    let mut func_argu = (&code[arg.start_byte()..arg.end_byte()]).to_string();
+					func_argu = func_argu.replace("&", "");
 
-                    ret_vec.push(("".to_string(), id, _typo.to_string()));
+					let split: Vec<&str> = func_argu.split(".").collect();
+					let (_, mut tmp_id, _typo) = table.get(split[0]);
+			        let mut id = tmp_id.to_string();
+					for j in 1 .. split.len(){
+						id.push_str("-");
+						id.push_str(split[j]);
+					}
+					ret_vec.push(("".to_string(), id.clone(), _typo.to_string()));
+                    
                     //println!("{} {} {} ", func_argu,id, _typo);
 					//println!("{:?}*******", ret_vec);
-                    if id !=-1{
+                    if !id.eq("-1"){
 						//println!("CAME HERE");
                         for element in & * self.file_vec {
                             let (_, mut arg_vec) = self.find_function(&element, &element.item_list, exp , &table);
@@ -381,12 +389,12 @@ impl FileVector {
             None =>{ret_vec},
         }
     }
-	fn traverse_block(&self, node: &tree_sitter::Node, code: &str, file_name : String, tid: i32, block: String, arguments :Vec<(String, i32, String)>) {
+	fn traverse_block(&self, node: &tree_sitter::Node, code: &str, file_name : String, tid: i32, block: String, arguments :Vec<(String, String, String)>) {
         let mut symbol_table = symbol_table::symbolTable::new();
         
 		for arg in &arguments {
 			let (name, id, _type) = arg;
-			symbol_table.symbolVec.push((name.to_string(), *id, _type.to_string()));
+			symbol_table.symbolVec.push((name.to_string(), id.to_string(), _type.to_string()));
 		}
 		let mut limit = 0;
 		let mut preorder: Vec<Node<'_>> = traverse(node.walk(), Order::Pre).collect::<Vec<_>>();
@@ -428,7 +436,7 @@ impl FileVector {
 
                     //println!("type split {:?} {:?}", _type, split);
                     let mut arg = Vec::new();
-                    arg.push(("self".to_string(), symbol_id, _type.to_string()));
+                    arg.push(("self".to_string(), symbol_id.to_string(), _type.to_string()));
 					//println!("self -> {}", _type.to_string());
                     for element in & * self.file_vec{
                         self.search(&element, &element.item_list,&key[split[0].len()+1 ..],tid , block.clone(), _type.to_string()  ,arg.clone());
@@ -438,7 +446,7 @@ impl FileVector {
 					//println!("SPLIT = {:?}", split);
                     if key.eq("lock") || key.eq("read") || key.eq("write") {
                         let mut idtf = String::from("");
-                        if symbol_id ==-1 {
+                        if symbol_id.eq("-1")  {
                             idtf=split[0].to_string();
                         }
                         else {
@@ -456,7 +464,7 @@ impl FileVector {
 						println!("key : {}", key);
 						println!("block id : {}", block);
                         */
-                        println!("Lock : {}, file: {}  {:?}",idtf, file_name, call_node.end_position().row);
+                        //println!("Lock : {}, block: {}  {:?}",idtf, block, call_node.end_position().row);
 						//println!("table : {:?}", symbol_table);
 				    	self.sender.send((tid, idtf, block.clone(), key.to_string(),file_name.clone(), call_node.end_position().row ));
 
@@ -503,7 +511,7 @@ impl FileVector {
 
 		}
 	}
-	fn search(&self, file: &File, list: &Vec<ItemType>, key: &str, tid: i32, block_id: String, _type : String ,arguments : Vec<(String,i32,String)>) {
+	fn search(&self, file: &File, list: &Vec<ItemType>, key: &str, tid: i32, block_id: String, _type : String ,arguments : Vec<(String,String,String)>) {
         if key.contains("::") {
 			let split: Vec<&str> = key.split("::").collect();
             for item in list {

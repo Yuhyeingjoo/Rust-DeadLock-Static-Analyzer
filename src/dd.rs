@@ -50,7 +50,7 @@ impl GraphMaker {
     pub fn run(&mut self) {
         loop {
             let received : (i32, String, String, String,String,usize) = self.recv.recv().unwrap();
-            //println!("**************RECEIVED {:?}",received);
+            println!("**************RECEIVED {:?}",received);
             let mut tidVec : Vec<(i32,String)>  = Vec::new();
             tidVec.push((received.0, received.2));
             let mut prim_vec : Vec<String> = Vec::new();
@@ -183,9 +183,7 @@ impl GraphMaker {
         let end = self.graph.node_count() ;
         //let cur_visit  = self.graph.node_weight_mut(NodeIndex::new(end)).unwrap().visit;
         for n in 0 .. end {
-            if self.dfs(NodeIndex::new(n), Vec::new(), Vec::new()){
-                break;
-            }
+            println!("graph : {:?}", self.graph[NodeIndex::new(n)]);
         }
 
     }
@@ -269,6 +267,7 @@ impl GraphMaker {
                 }
                 else{
 
+                    println!("here");
                     let gnodeTup = gnode.tidBlock[0].clone();
                     let gnode_prim = gnode.primitive[0].clone();
                     let iterNode = self.graph.node_indices();
