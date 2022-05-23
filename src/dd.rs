@@ -191,20 +191,25 @@ impl GraphMaker {
     fn make_graph(&mut self, gnode : GNode){
         let new_lock_name = gnode.lockName.clone();
         let node_index = self.add_to_graph(gnode);
+        println!("dfs {:?}", node_index);
         /*
         if is_cyclic_directed(&self.graph){
             println!("Deadlock! on {}",new_lock_name);
         }
         */
         //self.search();
-        self.dfs(node_index, Vec::new(), Vec::new());
+        for ele in node_index {
+            self.dfs(ele, Vec::new(), Vec::new());
+
+        }
     }
 
-    fn add_to_graph(&mut self, gnode:GNode)->NodeIndex {
+    fn add_to_graph(&mut self, gnode:GNode)->Vec<NodeIndex> {
         let add_or_not : bool = true;
         let SameNode = self.graph
             .node_indices().rev().find(|i| self.graph[*i].lockName == gnode.lockName);
         let mut exist : GNode;
+        let mut ret : Vec <NodeIndex>= Vec::new();
         match SameNode {
             Some(existing) =>{
                 if GraphMaker::compare_block(&gnode.tidBlock[0], &self.graph.node_weight(existing).unwrap().tidBlock){
@@ -223,13 +228,14 @@ impl GraphMaker {
                                             });
                         self.graph.node_weight_mut(existing).unwrap().primitive.push(gnode_prim);
                     }
+                    ret.push(existing);
+                    ret
 
                 }
                 else if GraphMaker::compare_TID(&gnode.tidBlock[0], &self.graph.node_weight(existing).unwrap().tidBlock){
                     let iterNode = self.graph.node_indices();
                     let gnodeTup = gnode.tidBlock[0].clone();
                     let gnode_prim = gnode.primitive[0].clone();
-
                     //println!("same lock different block {}", &gnode.lockName);
                     //println!("Added {:?}", gnode);
                     //let added_node = self.graph.add_node(gnode);
@@ -245,6 +251,7 @@ impl GraphMaker {
                             */
                             let gnode_primitive = gnode.primitive[0].clone();
                             if gnode_primitive.eq("lock") {
+                                ret.push(element.clone());
                                 self.graph.add_edge(element, existing, 
                                                     Edge{
                                                         rw : EdgeInfo::None,
@@ -252,6 +259,7 @@ impl GraphMaker {
                                 break;
                             }
                             else {
+                                ret.push(element.clone());
                                 self.graph.add_edge(element, existing, 
                                                     Edge{
                                                         rw : EdgeInfo::lock_info(gnode),
@@ -264,10 +272,10 @@ impl GraphMaker {
                     }
                     self.graph.node_weight_mut(existing).unwrap().tidBlock.push(gnodeTup);
                     self.graph.node_weight_mut(existing).unwrap().primitive.push(gnode_prim);
+                    ret
                 }
                 else{
 
-                    println!("here");
                     let gnodeTup = gnode.tidBlock[0].clone();
                     let gnode_prim = gnode.primitive[0].clone();
                     let iterNode = self.graph.node_indices();
@@ -283,6 +291,7 @@ impl GraphMaker {
 							*/
                             let gnode_primitive = gnode.primitive[0].clone();
                             if gnode_primitive.eq("lock") {
+                                ret.push(element.clone());
                                 self.graph.add_edge(element, existing, 
                                                     Edge{
                                                         rw : EdgeInfo::None,
@@ -290,6 +299,7 @@ impl GraphMaker {
                                 break;
                             }
                             else {
+                                ret.push(element.clone());
                                 self.graph.add_edge(element, existing, 
                                                     Edge{
                                                         rw : EdgeInfo::lock_info(gnode),
@@ -303,8 +313,8 @@ impl GraphMaker {
                     self.graph.node_weight_mut(existing).unwrap().tidBlock.push(gnodeTup);
                     self.graph.node_weight_mut(existing).unwrap().primitive.push(gnode_prim);
                     //println!("pushed {:?}", self.graph.node_weight_mut(existing).unwrap());
+                    ret
                 }
-                existing
             },
             None => {
                 let gnodeTup = gnode.tidBlock[0].clone();
@@ -322,23 +332,25 @@ impl GraphMaker {
                                      &self.graph.node_weight(added_node).unwrap().tidBlock);
 							*/
                             if gnode.primitive[0].eq("lock") {
+                                ret.push(element.clone());
                                 self.graph.add_edge(element, added_node.clone(), 
                                                     Edge{
                                                         rw : EdgeInfo::None,
                                                     });
-                                break;
+                                //break;
                             }
                             else {
+                                ret.push(element.clone());
                                 self.graph.add_edge(element, added_node.clone(), 
                                                     Edge{
-                                                        rw : EdgeInfo::lock_info(gnode),
+                                                        rw : EdgeInfo::lock_info(gnode.clone()),
                                                     });
-                                break;
+                                //break;
                             }
                     }
                 
                }
-                added_node
+                ret
             },
         }
     }
