@@ -71,7 +71,8 @@ impl GraphMaker {
     }
     
     
-    fn dfs(&mut self, n : NodeIndex, mut  path : Vec<(String, bool)>, mut lock_position : Vec<(String, usize)>) -> bool{
+    fn dfs(&mut self, n : NodeIndex, mut  path : Vec<(String, bool)>, mut lock_position : Vec<(String, usize)>) 
+        -> bool{
         let mut  file_name = String::new();
         let mut line_num : usize = 0;
         {
@@ -84,9 +85,11 @@ impl GraphMaker {
                     if element.eq("write"){
                         is_write = true;
                     }
-                        path.push((cur.lockName.clone(), is_write ));
+                        path.push((cur.lockName.clone(), is_write));
                 }
             }
+                
+            
             file_name = cur.file_name.clone();
             line_num = cur.line_num;
             if !lock_position.contains(&(file_name.clone(), line_num)) {
@@ -110,7 +113,8 @@ impl GraphMaker {
             }
             if lock_primitive[0].eq("lock"){
                 if cur_visit==1 {
-                    println!("Deadlock on {} {:?}" ,lock_name, lock_position);
+                        println!("Deadlock on {} {:?}" ,lock_name, lock_position);
+                        
                     return true;
                 }          
                 else if cur_visit ==0{
@@ -123,11 +127,19 @@ impl GraphMaker {
                     let mut is_write : bool = false;
                     let mut arg_path = path.clone();
                     if let EdgeInfo::lock_info(e_gnode) = &self.graph.edge_weight(edge).unwrap().rw{
+                        let file_name = e_gnode.file_name.clone();
+                        let line_num = e_gnode.line_num;
                         //println!("Edge :: {:?}", e_gnode);
                         if e_gnode.primitive[0].eq("write"){
+                            if !lock_position.contains(&(file_name.clone(), line_num)) {
+                                lock_position.push((file_name, line_num));
+                            }
                             is_write = true;
+                            arg_path.push((e_gnode.lockName.clone(), is_write));
                         }
-                        arg_path.push((e_gnode.lockName.clone(), is_write));
+                        else{
+                            arg_path.push((e_gnode.lockName.clone(), is_write));
+                        }
                     }
                 if cur_visit ==0 {
                         ret_val = self.dfs(node, arg_path.clone(), lock_position.clone());
@@ -135,7 +147,7 @@ impl GraphMaker {
                 else {
                     //println!("*******************************************cycle!!\n{:?}",path);
                     if GraphMaker::check(&path){
-                        println!("Deadlock on {}",lock_name);
+                        println!("Deadlock on {} {:?}",lock_name, lock_position);
                         return true;
                     }
                 }
