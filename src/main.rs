@@ -28,5 +28,6 @@ fn main() {
 	file_vec.start();
 
 	handle.join();
+    println!("~__________________________end");
 }
 

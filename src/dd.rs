@@ -1,13 +1,12 @@
 use petgraph::Outgoing;
 use std::sync::mpsc::{Receiver};
-use petgraph::algo::is_cyclic_directed;
 use petgraph::{Graph,algo};
 use petgraph::graph::NodeIndex;
-use petgraph::visit::Dfs;
 pub struct GraphMaker {
     recv : Receiver <(i32, String,String,String, String, usize)>,
     graph : Graph<GNode, Edge>,
 }
+#[path = "json.rs"] mod json;
 #[derive(Debug)]
 struct GNode {
     lockName: String,
@@ -50,7 +49,10 @@ impl GraphMaker {
     pub fn run(&mut self) {
         loop {
             let received : (i32, String, String, String,String,usize) = self.recv.recv().unwrap();
-            println!("**************RECEIVED {:?}",received);
+            if received.0 ==-1 {
+                break;
+            }
+            //println!("**************RECEIVED {:?}",received);
             let mut tidVec : Vec<(i32,String)>  = Vec::new();
             tidVec.push((received.0, received.2));
             let mut prim_vec : Vec<String> = Vec::new();
@@ -67,12 +69,12 @@ impl GraphMaker {
             self.make_graph(gnode_bowl);
             
         }
-
+        
     }
     
     
     fn dfs(&mut self, n : NodeIndex, mut  path : Vec<(String, bool)>, mut lock_position : Vec<(String, usize)>) 
-        -> bool{
+        {
         let mut  file_name = String::new();
         let mut line_num : usize = 0;
         {
@@ -113,12 +115,12 @@ impl GraphMaker {
             }
             if lock_primitive[0].eq("lock"){
                 if cur_visit==1 {
-                        println!("Deadlock on {} {:?}" ,lock_name, lock_position);
-                        
-                    return true;
+                    println!("Deadlock on lock :  {} {:?}" ,lock_name, lock_position);
+                    json::write_json(lock_position.clone());
+                    return ;
                 }          
                 else if cur_visit ==0{
-                    ret_val = self.dfs(node, path.clone(), lock_position.clone());
+                    self.dfs(node, path.clone(), lock_position.clone());
                 }
 
             }
@@ -142,13 +144,13 @@ impl GraphMaker {
                         }
                     }
                 if cur_visit ==0 {
-                        ret_val = self.dfs(node, arg_path.clone(), lock_position.clone());
+                        self.dfs(node, arg_path.clone(), lock_position.clone());
                     }
                 else {
                     //println!("*******************************************cycle!!\n{:?}",path);
                     if GraphMaker::check(&path){
                         println!("Deadlock on {} {:?}",lock_name, lock_position);
-                        return true;
+                        json::write_json(lock_position.clone());
                     }
                 }
             
@@ -159,7 +161,6 @@ impl GraphMaker {
             let cur  = self.graph.node_weight_mut(n).unwrap();
             cur.visit = 0;
         }
-        return ret_val;
 
     }
     fn check( path :& Vec<(String,bool)>) -> bool{
@@ -200,10 +201,9 @@ impl GraphMaker {
 
     }
     
-    fn make_graph(&mut self, gnode : GNode){
+    fn make_graph(&mut self, gnode : GNode) {
         let new_lock_name = gnode.lockName.clone();
         let node_index = self.add_to_graph(gnode);
-        println!("dfs {:?}", node_index);
         /*
         if is_cyclic_directed(&self.graph){
             println!("Deadlock! on {}",new_lock_name);
@@ -212,7 +212,6 @@ impl GraphMaker {
         //self.search();
         for ele in node_index {
             self.dfs(ele, Vec::new(), Vec::new());
-
         }
     }
 

@@ -339,6 +339,8 @@ impl FileVector {
 				panic!("Couldn't find main block");
 			}
 		}
+
+		self.sender.send((-1, String::from(""), String::from(""), String::from(""),String::from(""), 1 ));
 	}
     fn flow_argument(&self, node : &Node<'_>, code : &str, table: &symbol_table::symbolTable ) ->Vec<(String, String, String)>  {
         let mut ret_vec : Vec<(String,String, String)> = Vec::new();
