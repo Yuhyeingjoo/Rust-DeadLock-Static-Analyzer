@@ -613,12 +613,13 @@ impl FileVector {
 		//println!("symbol name : {} , symbol type key : {}", var_str, value_str);
 
 		let mut symbol_type = String::from("");
+        let mut a : Vec<String> = Vec::new();
 		if value_str.contains("::"){
 			let split: Vec<&str> = value_str.split("::").collect();
 		    value_str = &value_str[split[0].len() + 2 ..];
         }
         for element in & * self.file_vec {
-            (symbol_type, _) = self.find_function(&element, &element.item_list, value_str, &symbol_table);
+            (symbol_type, a) = self.find_function(&element, &element.item_list, value_str, &symbol_table);
         }
         //println!("return type : {}", symbol_type);
 		//println!("");

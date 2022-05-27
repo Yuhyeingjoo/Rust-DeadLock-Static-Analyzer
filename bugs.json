@@ -1,10 +1,12 @@
-[
-  [
-    "../abba/src/lib.rs",
-    50
-  ],
-  [
-    "../abba/src/man.rs",
-    44
+{
+  "bug_infos": [
+    {
+      "file_name": "../abba/src/lib.rs",
+      "line_number": 50
+    },
+    {
+      "file_name": "../abba/src/man.rs",
+      "line_number": 44
+    }
   ]
-]
+}
