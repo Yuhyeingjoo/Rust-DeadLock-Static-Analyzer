@@ -115,7 +115,7 @@ impl GraphMaker {
             }
             if lock_primitive[0].eq("lock"){
                 if cur_visit==1 {
-                    println!("Deadlock on lock :  {} {:?}" ,lock_name, lock_position);
+                    //println!("Deadlock on lock :  {} {:?}" ,lock_name, lock_position);
                     json::write_json(lock_position.clone());
                     return ;
                 }          
@@ -149,7 +149,7 @@ impl GraphMaker {
                 else {
                     //println!("*******************************************cycle!!\n{:?}",path);
                     if GraphMaker::check(&path){
-                        println!("Deadlock on {} {:?}",lock_name, lock_position);
+                        //println!("Deadlock on {} {:?}",lock_name, lock_position);
                         json::write_json(lock_position.clone());
                     }
                 }
@@ -196,7 +196,7 @@ impl GraphMaker {
         let end = self.graph.node_count() ;
         //let cur_visit  = self.graph.node_weight_mut(NodeIndex::new(end)).unwrap().visit;
         for n in 0 .. end {
-            println!("graph : {:?}", self.graph[NodeIndex::new(n)]);
+            //println!("graph : {:?}", self.graph[NodeIndex::new(n)]);
         }
 
     }
